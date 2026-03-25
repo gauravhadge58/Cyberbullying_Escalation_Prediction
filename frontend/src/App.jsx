@@ -3,7 +3,6 @@ import Layout from "./components/Layout";
 import Dashboard from "./pages/Dashboard";
 import Monitor from "./pages/Monitor";
 import Analytics from "./pages/Analytics";
-import Upload from "./pages/Upload";
 import Simulator from "./pages/Simulator";
 
 export default function App() {
@@ -14,7 +13,6 @@ export default function App() {
         <Route path="dashboard" element={<Dashboard />} />
         <Route path="monitor" element={<Monitor />} />
         <Route path="analytics" element={<Analytics />} />
-        <Route path="upload" element={<Upload />} />
         <Route path="simulator" element={<Simulator />} />
       </Route>
     </Routes>
