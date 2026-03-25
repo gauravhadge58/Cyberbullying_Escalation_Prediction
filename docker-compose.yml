@@ -7,6 +7,11 @@ services:
       - "27017:27017"
     volumes:
       - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   ml-service:
     build: 
@@ -15,8 +20,15 @@ services:
       - "8000:8000"
     environment:
       - PYTHONUNBUFFERED=1
+      - HF_HOME=/app/model_cache
     volumes:
       - ./ml-service/saved_models:/app/saved_models
+      - ml_model_cache:/app/model_cache
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
 
   backend:
     build: 
@@ -28,19 +40,28 @@ services:
       - MONGO_URI=mongodb://mongo:27017/cyberbullying_db
       - ML_SERVICE_URL=http://ml-service:8000
     depends_on:
-      - mongo
-      - ml-service
+      mongo:
+        condition: service_healthy
+      ml-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   frontend:
     build: 
       context: ./frontend
+      args:
+        - VITE_BACKEND_URL=http://localhost:5000/api
+        - VITE_WS_URL=ws://localhost:5000
     ports:
-      - "5173:5173"
-    environment:
-      - VITE_BACKEND_URL=http://localhost:5000/api
-      - VITE_WS_URL=ws://localhost:5000
+      - "80:80"
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
 
 volumes:
   mongo_data:
+  ml_model_cache:

@@ -1,0 +1,9 @@
+venv
+__pycache__
+*.pyc
+.env
+datasets
+test_ml.py
+test_ml_simple.py
+test_torch.py
+logs

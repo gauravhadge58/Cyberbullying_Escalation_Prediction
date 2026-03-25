@@ -13,6 +13,8 @@ export default function Simulator() {
   const [username, setUsername] = useState("");
   const [isJoined, setIsJoined] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [isMuted, setIsMuted] = useState(false);
+  const [muteRemaining, setMuteRemaining] = useState(0);
   const scrollRef = useRef(null);
 
   // Fetch initial messages for the demo room
@@ -64,6 +66,23 @@ export default function Simulator() {
     }
   }, [isJoined]);
 
+  // Handle mute countdown
+  useEffect(() => {
+    let interval;
+    if (isMuted && muteRemaining > 0) {
+      interval = setInterval(() => {
+        setMuteRemaining((prev) => {
+          if (prev <= 1) {
+            setIsMuted(false);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    }
+    return () => clearInterval(interval);
+  }, [isMuted, muteRemaining]);
+
   // Auto-scroll to bottom
   useEffect(() => {
     if (scrollRef.current) {
@@ -96,8 +115,14 @@ export default function Simulator() {
       });
       setInputText("");
     } catch (err) {
-      console.error("Failed to send message", err);
-      alert("Error sending message. Is the backend running?");
+      if (err.response?.status === 403 && err.response?.data?.muted) {
+        setIsMuted(true);
+        setMuteRemaining(err.response.data.remaining || 600);
+        alert(err.response.data.error);
+      } else {
+        console.error("Failed to send message", err);
+        alert("Error sending message. Is the backend running?");
+      }
     } finally {
       setLoading(false);
     }
@@ -221,20 +246,22 @@ export default function Simulator() {
       <form onSubmit={handleSend} className="p-4 bg-white border-t border-gray-200 flex gap-3">
         <input
           type="text"
-          placeholder="Type a message to test the prediction model..."
-          className="flex-1 px-4 py-3 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary-500 bg-gray-50 focus:bg-white transition-colors"
+          placeholder={isMuted ? `Muted: Wait ${muteRemaining}s` : "Type a message to test the prediction model..."}
+          className={`flex-1 px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 focus:ring-primary-500 transition-colors ${
+            isMuted ? "bg-red-50 border-red-200 cursor-not-allowed" : "bg-gray-50 border-gray-300 focus:bg-white"
+          }`}
           value={inputText}
           onChange={(e) => setInputText(e.target.value)}
-          disabled={loading}
+          disabled={loading || isMuted}
           autoFocus
         />
         <button
           type="submit"
-          disabled={!inputText.trim() || loading}
+          disabled={!inputText.trim() || loading || isMuted}
           className="px-6 py-3 bg-primary-600 hover:bg-primary-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-semibold rounded-xl transition-all shadow-sm active:scale-95 flex items-center gap-2"
         >
-          {loading ? "Sending..." : "Send"} 
-          <span className="text-xl">✈️</span>
+          {loading ? "Sending..." : (isMuted ? "Muted" : "Send")} 
+          <span className="text-xl">{isMuted ? "🔇" : "✈️"}</span>
         </button>
       </form>
     </div>

@@ -99,7 +99,9 @@ def rule_based_escalation(features: dict) -> str:
     """
     score = 0
     
-    if features.get("max_toxicity", 0) > 0.8:
+    if features.get("max_toxicity", 0) > 0.9:
+        score += 4
+    elif features.get("max_toxicity", 0) > 0.7:
         score += 3
     elif features.get("max_toxicity", 0) > 0.5:
         score += 2
@@ -114,19 +116,20 @@ def rule_based_escalation(features: dict) -> str:
         score += 1
     
     if features.get("abusive_freq", 0) > 0.5:
-        score += 2
+        score += 3
     elif features.get("abusive_freq", 0) > 0.2:
         score += 1
     
     if features.get("bully_ratio", 0) > 0.5:
-        score += 2
+        score += 3
     elif features.get("bully_ratio", 0) > 0.3:
         score += 1
     
     if features.get("repeated_target", 0):
         score += 2
     
-    if score >= 8:
+    # Lower threshold from 8 to 7 for HIGH risk
+    if score >= 7:
         return LEVEL_HIGH
     elif score >= 4:
         return LEVEL_MEDIUM

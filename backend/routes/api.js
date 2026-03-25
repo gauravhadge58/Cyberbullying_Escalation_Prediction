@@ -9,6 +9,7 @@ const router = express.Router();
 
 const Message = require("../models/Message");
 const Conversation = require("../models/Conversation");
+const muteManager = require("../utils/muteManager");
 
 const ML_URL = process.env.ML_SERVICE_URL || "http://localhost:8000";
 
@@ -22,6 +23,17 @@ router.post("/predict", async (req, res) => {
     const { messages } = req.body;
     if (!messages || !Array.isArray(messages)) {
       return res.status(400).json({ error: "messages array required" });
+    }
+
+    // Check if any users are muted
+    const mutedUsers = messages.filter(m => muteManager.isMuted(m.user_id));
+    if (mutedUsers.length > 0) {
+      const firstMuted = mutedUsers[0].user_id;
+      return res.status(403).json({ 
+        error: `User ${firstMuted} is temporarily muted for repeated violations.`,
+        muted: true,
+        remaining: muteManager.getRemainingMuteTime(firstMuted)
+      });
     }
 
     // Enhance payload with historical context for better escalation prediction
@@ -92,6 +104,33 @@ router.post("/predict", async (req, res) => {
       },
     }));
     if (convOps.length) await Conversation.bulkWrite(convOps);
+
+    // ── Automated Moderation (Auto-Mute) ──────────
+    const penalizedUsers = new Set();
+
+    // 1. Direct Toxicity Strike (Any message >= 0.95 toxicity)
+    msgResults.forEach(m => {
+      if (m.toxicity_score >= 0.95) {
+        penalizedUsers.add(m.user_id);
+      }
+    });
+
+    // 2. Room-Level Strike (Conversation is HIGH risk)
+    convResults.forEach(c => {
+      if (c.escalation_level === "HIGH") {
+        msgResults
+          .filter(m => m.conversation_id === c.conversation_id && m.is_bullying)
+          .forEach(m => penalizedUsers.add(m.user_id));
+      }
+    });
+
+    // Apply violations
+    penalizedUsers.forEach(uid => {
+      const newlyMuted = muteManager.addViolation(uid);
+      if (newlyMuted) {
+        console.log(`🚫 User ${uid} has been muted for 10 minutes.`);
+      }
+    });
 
     // Broadcast via WebSocket if app has ws server attached
     const wss = req.app.get("wss");
