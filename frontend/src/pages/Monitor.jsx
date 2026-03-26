@@ -10,7 +10,10 @@ export default function Monitor() {
     fetchData();
     
     // Listen for WebSocket updates
-    const wsUrl = import.meta.env.VITE_WS_URL || "ws://localhost:5000";
+    const rawWsUrl = import.meta.env.VITE_WS_URL || "ws://localhost:5000";
+    const wsUrl = rawWsUrl.startsWith("/")
+      ? `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}${rawWsUrl}`
+      : rawWsUrl;
     let ws;
     try {
       ws = new WebSocket(wsUrl);

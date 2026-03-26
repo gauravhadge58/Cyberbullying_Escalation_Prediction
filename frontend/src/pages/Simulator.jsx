@@ -3,7 +3,10 @@ import axios from "axios";
 import { api } from "../api";
 
 const API_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:5000/api";
-const WS_URL = import.meta.env.VITE_WS_URL || "ws://localhost:5000";
+const rawWsUrl = import.meta.env.VITE_WS_URL || "ws://localhost:5000";
+const WS_URL = rawWsUrl.startsWith("/") 
+  ? `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}${rawWsUrl}`
+  : rawWsUrl;
 const CONVERSATION_ID = "live_demo_room";
 
 export default function Simulator() {
@@ -181,10 +184,10 @@ export default function Simulator() {
   return (
     <div className="h-full flex flex-col bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden animate-fade-in">
       {/* Header */}
-      <div className={`px-6 py-4 flex justify-between items-center transition-colors duration-500 ${headerColors[escalationLevel]}`}>
+      <div className={`px-4 md:px-6 py-3 md:py-4 flex justify-between items-center transition-colors duration-500 ${headerColors[escalationLevel]}`}>
         <div>
-          <h2 className="text-lg font-bold">Model Test Room: {CONVERSATION_ID}</h2>
-          <p className="text-sm opacity-90">Logged in as {username}</p>
+          <h2 className="text-base md:text-lg font-bold truncate max-w-[150px] md:max-w-none">Test Room: {CONVERSATION_ID}</h2>
+          <p className="text-xs opacity-90">User: {username}</p>
         </div>
         <div className="flex flex-col items-end gap-2">
           <button 
