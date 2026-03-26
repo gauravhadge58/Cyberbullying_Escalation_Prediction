@@ -54,8 +54,8 @@ services:
     build: 
       context: ./frontend
       args:
-        - VITE_BACKEND_URL=http://localhost:5000/api
-        - VITE_WS_URL=ws://localhost:5000
+        - VITE_BACKEND_URL=${VITE_BACKEND_URL:-http://localhost:5000/api}
+        - VITE_WS_URL=${VITE_WS_URL:-ws://localhost:5000}
     ports:
       - "5173:80"
     depends_on:
