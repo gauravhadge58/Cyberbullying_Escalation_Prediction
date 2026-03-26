@@ -2,8 +2,8 @@ import { useState, useEffect, useRef } from "react";
 import axios from "axios";
 import { api } from "../api";
 
-const API_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:5000/api";
-const rawWsUrl = import.meta.env.VITE_WS_URL || "ws://localhost:5000";
+const API_URL = import.meta.env.VITE_BACKEND_URL || "/api";
+const rawWsUrl = import.meta.env.VITE_WS_URL || "/ws";
 const WS_URL = rawWsUrl.startsWith("/") 
   ? `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}${rawWsUrl}`
   : rawWsUrl;
@@ -89,7 +89,10 @@ export default function Simulator() {
   // Auto-scroll to bottom
   useEffect(() => {
     if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+      scrollRef.current.scrollTo({
+        top: scrollRef.current.scrollHeight,
+        behavior: "smooth"
+      });
     }
   }, [messages]);
 
@@ -103,28 +106,54 @@ export default function Simulator() {
     if (!inputText.trim() || loading) return;
 
     const newMsg = {
-      id: `msg_${crypto.randomUUID()}`,
+      id: `msg_${Math.random().toString(36).substr(2, 9)}`,
       conversation_id: CONVERSATION_ID,
       user_id: username,
       message: inputText.trim(),
       timestamp: new Date().toISOString()
     };
 
+    console.log("📤 Chat Simulator: Sending to ", `${API_URL}/predict`);
+    // alert(`Attempting to send to: ${API_URL}/predict`); 
+    // Optimistic Update
+    const optimisticMsg = {
+      messageId: newMsg.id,
+      conversationId: newMsg.conversation_id,
+      userId: newMsg.user_id,
+      text: newMsg.message,
+      timestamp: newMsg.timestamp,
+      isBullying: false,
+      isOptimistic: true 
+    };
+    setMessages(prev => [...prev, optimisticMsg]);
+    setInputText("");
+
     setLoading(true);
     try {
       // Send to prediction API
-      await axios.post(`${API_URL}/predict`, {
+      const res = await axios.post(`${API_URL}/predict`, {
         messages: [newMsg]
       });
-      setInputText("");
+      
+      // Update with server results (toxicity, etc)
+      if (res.data.messages?.length > 0) {
+        const result = res.data.messages[0];
+        setMessages(prev => prev.map(m => 
+          m.messageId === newMsg.id 
+            ? { ...m, isBullying: result.is_bullying, toxicityScore: result.toxicity_score, isOptimistic: false }
+            : m
+        ));
+      }
     } catch (err) {
+      // Remove optimistic message on error
+      setMessages(prev => prev.filter(m => m.messageId !== newMsg.id));
       if (err.response?.status === 403 && err.response?.data?.muted) {
         setIsMuted(true);
         setMuteRemaining(err.response.data.remaining || 600);
         alert(err.response.data.error);
       } else {
         console.error("Failed to send message", err);
-        alert("Error sending message. Is the backend running?");
+        alert(`Error sending message: ${err.message}. Please check if the backend is reachable at ${API_URL}`);
       }
     } finally {
       setLoading(false);
@@ -219,9 +248,9 @@ export default function Simulator() {
                 <div 
                   className={`max-w-[70%] rounded-2xl px-5 py-3 shadow-sm ${
                     msg.isBullying 
-                      ? "bg-red-50 border border-red-200" 
-                      : (isMe ? "bg-primary-500 text-white" : "bg-white border border-gray-200")
-                  }`}
+                        ? "bg-red-50 border border-red-200" 
+                        : (isMe ? "bg-primary-500 text-white" : "bg-white border border-gray-200")
+                    } ${msg.isOptimistic ? "opacity-70" : "opacity-100"}`}
                 >
                   {!isMe && (
                     <div className="text-xs font-semibold text-gray-500 mb-1">

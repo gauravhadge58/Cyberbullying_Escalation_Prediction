@@ -19,6 +19,7 @@ const ML_URL = process.env.ML_SERVICE_URL || "http://localhost:8000";
 // stores results in MongoDB, broadcasts via WebSocket.
 // ─────────────────────────────────────────────
 router.post("/predict", async (req, res) => {
+  console.log(`📥 [API] Received predict request from ${req.ip} for conversation: ${req.body.messages?.[0]?.conversation_id}`);
   try {
     const { messages } = req.body;
     if (!messages || !Array.isArray(messages)) {
