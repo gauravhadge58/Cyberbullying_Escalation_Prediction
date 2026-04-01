@@ -308,4 +308,49 @@ router.delete("/conversations/:id", async (req, res) => {
   }
 });
 
+// ─────────────────────────────────────────────
+// Model Registry & Progress (proxy to ML service)
+// ─────────────────────────────────────────────
+router.get("/train/progress", async (req, res) => {
+  try {
+    const mlResponse = await axios.get(`${ML_URL}/train/progress`);
+    res.json(mlResponse.data);
+  } catch (err) {
+    console.error("Progress fetch error:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get("/models", async (req, res) => {
+  try {
+    const mlResponse = await axios.get(`${ML_URL}/models`);
+    res.json(mlResponse.data);
+  } catch (err) {
+    console.error("Models list error:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post("/models/:id/activate", async (req, res) => {
+  try {
+    const mlResponse = await axios.post(`${ML_URL}/models/${req.params.id}/activate`);
+    res.json(mlResponse.data);
+  } catch (err) {
+    console.error("Activate model error:", err.message);
+    const status = err.response?.status || 500;
+    res.status(status).json({ error: err.response?.data?.detail || err.message });
+  }
+});
+
+router.delete("/models/:id", async (req, res) => {
+  try {
+    const mlResponse = await axios.delete(`${ML_URL}/models/${req.params.id}`);
+    res.json(mlResponse.data);
+  } catch (err) {
+    console.error("Delete model error:", err.message);
+    const status = err.response?.status || 500;
+    res.status(status).json({ error: err.response?.data?.detail || err.message });
+  }
+});
+
 module.exports = router;

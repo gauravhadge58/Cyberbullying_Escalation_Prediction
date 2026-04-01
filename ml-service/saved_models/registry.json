@@ -1,0 +1,54 @@
+{
+  "active_id": "20260401_034949",
+  "models": [
+    {
+      "id": "legacy",
+      "trained_at": "Pre-registry",
+      "label": "Legacy Model (pre-registry)",
+      "rf_path": "escalation_model.joblib",
+      "encoder_path": "escalation_encoder.joblib",
+      "lstm_path": null,
+      "rf_available": true,
+      "lstm_available": false,
+      "num_conversations": null,
+      "lstm_accuracy": null,
+      "lstm_final_loss": null
+    },
+    {
+      "id": "20260401_033114",
+      "trained_at": "2026-04-01T03:35:02",
+      "label": "Model 20260401_033114",
+      "rf_path": "escalation_model_20260401_033125.joblib",
+      "encoder_path": "escalation_encoder_20260401_033125.joblib",
+      "lstm_path": "lstm_escalation_20260401_033114.pth",
+      "rf_available": true,
+      "lstm_available": true,
+      "num_conversations": 4022,
+      "lstm_accuracy": 0.9868,
+      "lstm_final_loss": 0.0291,
+      "rf_classes": [
+        "HIGH",
+        "LOW",
+        "MEDIUM"
+      ]
+    },
+    {
+      "id": "20260401_034949",
+      "trained_at": "2026-04-01T03:53:03",
+      "label": "Model 20260401_034949",
+      "rf_path": "escalation_model_20260401_035000.joblib",
+      "encoder_path": "escalation_encoder_20260401_035000.joblib",
+      "lstm_path": "lstm_escalation_20260401_034949.pth",
+      "rf_available": true,
+      "lstm_available": true,
+      "num_conversations": 4022,
+      "lstm_accuracy": 0.9878,
+      "lstm_final_loss": 0.0283,
+      "rf_classes": [
+        "HIGH",
+        "LOW",
+        "MEDIUM"
+      ]
+    }
+  ]
+}

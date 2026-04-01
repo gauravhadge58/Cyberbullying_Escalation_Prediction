@@ -1,8 +1,12 @@
 """
-Escalation prediction model.
-Groups messages by conversation_id, sorts by timestamp,
-then computes a rule-based escalation score.
-Also includes a Random Forest option trained on extracted features.
+Escalation prediction model — Hybrid (Rule-Based + Random Forest + LSTM).
+
+Pipeline:
+  1. Extract 9 hand-crafted features from the conversation.
+  2. Rule-based weighted scoring → LOW / MEDIUM / HIGH.
+  3. (Optional) Random Forest trained on those features.
+  4. (NEW) LSTM on raw toxicity score sequence for temporal pattern detection.
+  5. Hybrid decision: combine all three signals.
 """
 import os
 import joblib
@@ -13,16 +17,21 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import classification_report
 from sklearn.preprocessing import LabelEncoder
+from datetime import datetime
 
 from preprocessing import count_abusive_words
+from models import lstm_model as lstm
+import model_registry as registry
 
 # Escalation levels
 LEVEL_LOW = "LOW"
 LEVEL_MEDIUM = "MEDIUM"
 LEVEL_HIGH = "HIGH"
 
-MODEL_PATH = os.path.join(os.path.dirname(__file__), "..", "saved_models", "escalation_model.joblib")
-ENCODER_PATH = os.path.join(os.path.dirname(__file__), "..", "saved_models", "escalation_encoder.joblib")
+SAVED_MODELS_DIR = os.path.join(os.path.dirname(__file__), "..", "saved_models")
+# Legacy fallback paths
+MODEL_PATH = os.path.join(SAVED_MODELS_DIR, "escalation_model.joblib")
+ENCODER_PATH = os.path.join(SAVED_MODELS_DIR, "escalation_encoder.joblib")
 
 
 def get_sentiment(text: str) -> float:
@@ -139,82 +148,127 @@ def rule_based_escalation(features: dict) -> str:
 
 def train(df: pd.DataFrame) -> dict:
     """
-    (Optional) Train a Random Forest escalation classifier.
-    df must have columns: conversation_id, message, timestamp, toxicity_score, is_bullying, escalation_level
+    Train a Random Forest escalation classifier.
+    Saves with a timestamped filename and registers in model registry.
     """
     df = df.dropna(subset=["conversation_id", "message"]).copy()
     df["timestamp"] = pd.to_datetime(df["timestamp"], errors="coerce")
     df = df.sort_values(["conversation_id", "timestamp"])
-    
+
     feature_rows = []
     for conv_id, group in df.groupby("conversation_id"):
         feats = extract_conversation_features(group)
         feats["conversation_id"] = conv_id
-        # Use rule-based label if escalation_level not present
         if "escalation_level" in group.columns and group["escalation_level"].notna().any():
             feats["label"] = group["escalation_level"].mode()[0]
         else:
             feats["label"] = rule_based_escalation(feats.to_dict())
         feature_rows.append(feats)
-    
+
     feat_df = pd.DataFrame(feature_rows)
     feature_cols = ["avg_toxicity", "max_toxicity", "toxicity_trend", "avg_sentiment",
                     "sentiment_trend", "abusive_freq", "bully_ratio", "repeated_target", "message_count"]
-    
+
     X = feat_df[feature_cols].fillna(0).values
     le = LabelEncoder()
     y = le.fit_transform(feat_df["label"].values)
-    
+
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-    
+
     clf = RandomForestClassifier(n_estimators=100, random_state=42)
     clf.fit(X_train, y_train)
-    
+
     y_pred = clf.predict(X_test)
     report = classification_report(y_test, y_pred, target_names=le.classes_, output_dict=True)
-    
-    os.makedirs(os.path.dirname(MODEL_PATH), exist_ok=True)
-    joblib.dump(clf, MODEL_PATH)
-    joblib.dump(le, ENCODER_PATH)
-    
-    return {"report": report, "classes": list(le.classes_)}
+
+    # Save with timestamp
+    os.makedirs(SAVED_MODELS_DIR, exist_ok=True)
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    rf_filename = f"escalation_model_{ts}.joblib"
+    enc_filename = f"escalation_encoder_{ts}.joblib"
+    joblib.dump(clf, os.path.join(SAVED_MODELS_DIR, rf_filename))
+    joblib.dump(le, os.path.join(SAVED_MODELS_DIR, enc_filename))
+
+    return {
+        "report": report,
+        "classes": list(le.classes_),
+        "rf_filename": rf_filename,
+        "enc_filename": enc_filename,
+        "model_id_ts": ts,
+    }
 
 
 def predict_conversation(messages: list[dict]) -> dict:
     """
-    Predict escalation level for a list of messages (one conversation).
-    Each message dict: {id, conversation_id, user_id, timestamp, message, toxicity_score?, is_bullying?}
-    
-    Returns:
-        {escalation_level, escalation_score (0-10), features}
+    Hybrid escalation prediction: Rule-based + Random Forest (active) + LSTM (active).
+    Loads models from the active registry entry.
     """
     df = pd.DataFrame(messages)
-    df["timestamp"] = pd.to_datetime(df.get("timestamp", [pd.Timestamp.now()] * len(df)), errors="coerce")
+    df["timestamp"] = pd.to_datetime(
+        df.get("timestamp", [pd.Timestamp.now()] * len(df)), errors="coerce"
+    )
     df = df.sort_values("timestamp")
-    
+
     features = extract_conversation_features(df)
     feat_dict = features.to_dict()
-    
-    # Try ML model first, fall back to rule-based
-    if os.path.exists(MODEL_PATH) and os.path.exists(ENCODER_PATH):
+
+    # ── 1. Rule-Based ────────────────────────────────────
+    rule_level = rule_based_escalation(feat_dict)
+
+    # ── 2. Random Forest (from active registry entry) ────
+    rf_level = None
+    active = registry.get_active_model_entry()
+    rf_path = registry.full_path(active.get("rf_path")) if active else None
+    enc_path = registry.full_path(active.get("encoder_path")) if active else None
+
+    # Fallback to legacy paths
+    if not rf_path or not os.path.exists(rf_path):
+        rf_path = MODEL_PATH if os.path.exists(MODEL_PATH) else None
+        enc_path = ENCODER_PATH if os.path.exists(ENCODER_PATH) else None
+
+    if rf_path and enc_path and os.path.exists(rf_path) and os.path.exists(enc_path):
         try:
-            clf = joblib.load(MODEL_PATH)
-            le = joblib.load(ENCODER_PATH)
-            feature_cols = ["avg_toxicity", "max_toxicity", "toxicity_trend", "avg_sentiment",
-                            "sentiment_trend", "abusive_freq", "bully_ratio", "repeated_target", "message_count"]
+            clf = joblib.load(rf_path)
+            le = joblib.load(enc_path)
+            feature_cols = [
+                "avg_toxicity", "max_toxicity", "toxicity_trend", "avg_sentiment",
+                "sentiment_trend", "abusive_freq", "bully_ratio", "repeated_target", "message_count"
+            ]
             X = np.array([[feat_dict.get(c, 0) for c in feature_cols]])
             pred = clf.predict(X)[0]
-            level = le.inverse_transform([pred])[0]
+            rf_level = le.inverse_transform([pred])[0]
         except Exception:
-            level = rule_based_escalation(feat_dict)
+            rf_level = None
+
+    # ── 3. LSTM (from active registry entry) ─────────────
+    tox_scores = df["toxicity_score"].fillna(0.0).tolist() \
+        if "toxicity_score" in df.columns else [0.0]
+    lstm_path = registry.full_path(active.get("lstm_path")) if active else None
+    if lstm_path and not os.path.exists(lstm_path):
+        lstm_path = None
+    lstm_result = lstm.predict_escalation(tox_scores, model_path=lstm_path)
+    lstm_level = lstm_result["lstm_label"]
+
+    # ── 4. Hybrid Decision ───────────────────────────────
+    signals = [rule_level, lstm_level]
+    if rf_level:
+        signals.append(rf_level)
+
+    if LEVEL_HIGH in signals:
+        final_level = LEVEL_HIGH
+    elif signals.count(LEVEL_MEDIUM) >= 2:
+        final_level = LEVEL_MEDIUM
     else:
-        level = rule_based_escalation(feat_dict)
-    
-    # Map level to numeric score for UI display
+        final_level = rule_level
+
     score_map = {LEVEL_LOW: 2, LEVEL_MEDIUM: 5, LEVEL_HIGH: 9}
-    
+
     return {
-        "escalation_level": level,
-        "escalation_score": score_map.get(level, 2),
+        "escalation_level": final_level,
+        "escalation_score": score_map.get(final_level, 2),
         "features": feat_dict,
+        "lstm_result": lstm_result,
+        "rule_level": rule_level,
+        "rf_level": rf_level,
+        "active_model_id": active["id"] if active else None,
     }

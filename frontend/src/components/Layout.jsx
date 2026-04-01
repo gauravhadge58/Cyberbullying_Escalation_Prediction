@@ -6,6 +6,7 @@ const navItems = [
   { path: "/monitor", label: "Live Monitor", icon: "👁️" },
   { path: "/analytics", label: "Analytics", icon: "📈" },
   { path: "/simulator", label: "Test Chat", icon: "💬" },
+  { path: "/training", label: "Training", icon: "🧠" },
 ];
 
 export default function Layout() {
