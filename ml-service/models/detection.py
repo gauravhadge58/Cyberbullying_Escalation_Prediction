@@ -49,7 +49,7 @@ def train(df: pd.DataFrame) -> dict:
         "test_size": 0
     }
 
-def predict(messages: list[str]) -> list[dict]:
+def predict(messages: list[str], progress_cb=None) -> list[dict]:
     """
     Predict bullying for a list of raw message strings using BERT/RoBERTa.
     Successfully handles 6+ languages and multiple toxicity categories.
@@ -57,16 +57,28 @@ def predict(messages: list[str]) -> list[dict]:
     classifier = get_classifier()
     
     results = []
-    # Transformers can batch process
     cleaned = [clean_text(m) for m in messages]
     
-    # Process messages
-    try:
-        raw_predictions = classifier(cleaned)
-        print(f"DEBUG: raw_predictions sample: {raw_predictions[0] if raw_predictions else 'empty'}")
-    except Exception as e:
-        print(f"DEBUG: classifier error: {e}")
-        raise e
+    # Process in batches to prevent freezing and show progress
+    batch_size = 512
+    total = len(cleaned)
+    raw_predictions = []
+    
+    for i in range(0, total, batch_size):
+        batch = cleaned[i:i+batch_size]
+        try:
+            batch_preds = classifier(batch)
+            raw_predictions.extend(batch_preds)
+            
+            # Fire progress callback to update global training state
+            if progress_cb:
+                progress_cb(min(i + len(batch), total), total)
+                
+            if (i + len(batch)) % (batch_size * 5) == 0 or (i + len(batch)) == total:
+                print(f"    - BERT Progress: {min(i + len(batch), total)} / {total} messages processed...")
+        except Exception as e:
+            print(f"DEBUG: classifier error on batch {i}: {e}")
+            raise e
     
     for msg, raw_pred in zip(messages, raw_predictions):
         # toxic-bert returns 6 labels: 

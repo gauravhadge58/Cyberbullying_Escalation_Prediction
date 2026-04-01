@@ -19,6 +19,7 @@ const ML_URL = process.env.ML_SERVICE_URL || "http://localhost:8000";
 // stores results in MongoDB, broadcasts via WebSocket.
 // ─────────────────────────────────────────────
 router.post("/predict", async (req, res) => {
+  console.log(`📥 [API] Received predict request from ${req.ip} for conversation: ${req.body.messages?.[0]?.conversation_id}`);
   try {
     const { messages } = req.body;
     if (!messages || !Array.isArray(messages)) {
@@ -304,6 +305,51 @@ router.delete("/conversations/:id", async (req, res) => {
   } catch (err) {
     console.error("Clear room error:", err.message);
     res.status(500).json({ error: err.message });
+  }
+});
+
+// ─────────────────────────────────────────────
+// Model Registry & Progress (proxy to ML service)
+// ─────────────────────────────────────────────
+router.get("/train/progress", async (req, res) => {
+  try {
+    const mlResponse = await axios.get(`${ML_URL}/train/progress`);
+    res.json(mlResponse.data);
+  } catch (err) {
+    console.error("Progress fetch error:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get("/models", async (req, res) => {
+  try {
+    const mlResponse = await axios.get(`${ML_URL}/models`);
+    res.json(mlResponse.data);
+  } catch (err) {
+    console.error("Models list error:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post("/models/:id/activate", async (req, res) => {
+  try {
+    const mlResponse = await axios.post(`${ML_URL}/models/${req.params.id}/activate`);
+    res.json(mlResponse.data);
+  } catch (err) {
+    console.error("Activate model error:", err.message);
+    const status = err.response?.status || 500;
+    res.status(status).json({ error: err.response?.data?.detail || err.message });
+  }
+});
+
+router.delete("/models/:id", async (req, res) => {
+  try {
+    const mlResponse = await axios.delete(`${ML_URL}/models/${req.params.id}`);
+    res.json(mlResponse.data);
+  } catch (err) {
+    console.error("Delete model error:", err.message);
+    const status = err.response?.status || 500;
+    res.status(status).json({ error: err.response?.data?.detail || err.message });
   }
 });
 
