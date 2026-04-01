@@ -11,7 +11,7 @@ const Message = require("../models/Message");
 const Conversation = require("../models/Conversation");
 const muteManager = require("../utils/muteManager");
 
-const ML_URL = process.env.ML_SERVICE_URL || "http://localhost:8000";
+const ML_URL = process.env.ML_URL || "http://127.0.0.1:8000";
 
 // ─────────────────────────────────────────────
 // POST /api/predict
@@ -267,6 +267,7 @@ router.delete("/conversations", async (req, res) => {
   try {
     await Message.deleteMany({});
     await Conversation.deleteMany({});
+    muteManager.clearAll(); // Wipe all moderation penalties globally 
     
     // Broadcast update via WebSocket
     const wss = req.app.get("wss");
@@ -290,6 +291,7 @@ router.delete("/conversations/:id", async (req, res) => {
     const { id } = req.params;
     await Message.deleteMany({ conversationId: id });
     await Conversation.deleteOne({ conversationId: id });
+    muteManager.clearAll(); // Reset moderation restrictions when manually clearing a test room
     
     // Broadcast update via WebSocket
     const wss = req.app.get("wss");

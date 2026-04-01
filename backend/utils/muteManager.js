@@ -61,6 +61,13 @@ const muteManager = {
    */
   unmute: (userId) => {
     userStats.set(userId, { violations: 0, mutedUntil: null });
+  },
+
+  /**
+   * Clear all mutes and tracking history
+   */
+  clearAll: () => {
+    userStats.clear();
   }
 };
 

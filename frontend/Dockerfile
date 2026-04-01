@@ -1,31 +1,16 @@
-# Build stage
-FROM node:18-alpine as build-stage
+FROM node:18-alpine
 
 WORKDIR /app
 
-# Accept build arguments
-ARG VITE_BACKEND_URL
-ARG VITE_WS_URL
-
-# Set them as environment variables for the build process
-ENV VITE_BACKEND_URL=$VITE_BACKEND_URL
-ENV VITE_WS_URL=$VITE_WS_URL
-
+# Copy dependency files first to utilize Docker build cache
 COPY package*.json ./
 RUN npm install
 
+# The rest of the app files will be mapped via volumes for hot reloading
+# But we copy them in case the image is run standalone
 COPY . .
-RUN npm run build
 
-# Production stage
-FROM nginx:stable-alpine as production-stage
+EXPOSE 5173
 
-# Copy production build from build stage
-COPY --from=build-stage /app/dist /usr/share/nginx/html
-
-# Copy custom nginx config
-COPY nginx.conf /etc/nginx/conf.d/default.conf
-
-EXPOSE 80
-
-CMD ["nginx", "-g", "daemon off;"]
+# Ensures Vite binds to all network interfaces inside the container
+CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"]

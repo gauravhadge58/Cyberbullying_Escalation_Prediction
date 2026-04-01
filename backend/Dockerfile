@@ -2,17 +2,14 @@ FROM node:18-alpine
 
 WORKDIR /app
 
-# Install curl for healthcheck
-RUN apk add --no-cache curl
-
-# Install production dependencies
+# Copy dependency configs
 COPY package*.json ./
-RUN npm install --production
+RUN npm install
 
-# Copy source code
+# Rest of application mapped via volumes
 COPY . .
 
-# Expose backend port
 EXPOSE 5000
 
-CMD ["npm", "start"]
+# Runs via nodemon if in dependencies, or default npm start
+CMD ["npm", "run", "dev"]

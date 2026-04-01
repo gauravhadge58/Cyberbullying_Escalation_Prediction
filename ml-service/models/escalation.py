@@ -21,10 +21,7 @@ LEVEL_LOW = "LOW"
 LEVEL_MEDIUM = "MEDIUM"
 LEVEL_HIGH = "HIGH"
 
-MODEL_PATH = os.path.join(os.path.dirname(__file__), "..", "saved_models", "escalation_model.joblib")
-ENCODER_PATH = os.path.join(os.path.dirname(__file__), "..", "saved_models", "escalation_encoder.joblib")
-
-
+import model_registry as registry
 def get_sentiment(text: str) -> float:
     """Return TextBlob polarity score: -1 (negative) to +1 (positive)."""
     try:
@@ -128,16 +125,16 @@ def rule_based_escalation(features: dict) -> str:
     if features.get("repeated_target", 0):
         score += 2
     
-    # Lower threshold from 8 to 7 for HIGH risk
-    if score >= 7:
+    # Changed threshold to 9 because single-user testing triggers repeated_target (due to sender dominating the chat)
+    if score >= 9:
         return LEVEL_HIGH
-    elif score >= 4:
+    elif score >= 5:
         return LEVEL_MEDIUM
     else:
         return LEVEL_LOW
 
 
-def train(df: pd.DataFrame) -> dict:
+def train(df: pd.DataFrame, model_id: str | None = None) -> dict:
     """
     (Optional) Train a Random Forest escalation classifier.
     df must have columns: conversation_id, message, timestamp, toxicity_score, is_bullying, escalation_level
@@ -173,11 +170,27 @@ def train(df: pd.DataFrame) -> dict:
     y_pred = clf.predict(X_test)
     report = classification_report(y_test, y_pred, target_names=le.classes_, output_dict=True)
     
-    os.makedirs(os.path.dirname(MODEL_PATH), exist_ok=True)
-    joblib.dump(clf, MODEL_PATH)
-    joblib.dump(le, ENCODER_PATH)
+    if not model_id:
+        import datetime
+        model_id = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        
+    MODELS_DIR = os.path.join(os.path.dirname(__file__), "..", "saved_models")
+    rf_filename = f"rf_{model_id}.joblib"
+    enc_filename = f"enc_{model_id}.joblib"
     
-    return {"report": report, "classes": list(le.classes_)}
+    rf_path = os.path.join(MODELS_DIR, rf_filename)
+    enc_path = os.path.join(MODELS_DIR, enc_filename)
+    
+    os.makedirs(MODELS_DIR, exist_ok=True)
+    joblib.dump(clf, rf_path)
+    joblib.dump(le, enc_path)
+    
+    return {
+        "report": report, 
+        "classes": list(le.classes_),
+        "rf_filename": rf_filename,
+        "enc_filename": enc_filename
+    }
 
 
 def predict_conversation(messages: list[dict]) -> dict:
@@ -196,10 +209,11 @@ def predict_conversation(messages: list[dict]) -> dict:
     feat_dict = features.to_dict()
     
     # Try ML model first, fall back to rule-based
-    if os.path.exists(MODEL_PATH) and os.path.exists(ENCODER_PATH):
+    paths = registry.get_active_model_paths()
+    if paths and paths.get("rf") and paths.get("encoder"):
         try:
-            clf = joblib.load(MODEL_PATH)
-            le = joblib.load(ENCODER_PATH)
+            clf = joblib.load(paths["rf"])
+            le = joblib.load(paths["encoder"])
             feature_cols = ["avg_toxicity", "max_toxicity", "toxicity_trend", "avg_sentiment",
                             "sentiment_trend", "abusive_freq", "bully_ratio", "repeated_target", "message_count"]
             X = np.array([[feat_dict.get(c, 0) for c in feature_cols]])

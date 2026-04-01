@@ -1,8 +1,7 @@
 node_modules
-dist
 npm-debug.log
-.env
+build
+dist
 .git
-.gitignore
-Dockerfile
-docker-compose.yml
+.env
+.antigravity

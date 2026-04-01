@@ -1,23 +1,24 @@
-FROM python:3.10-slim
+FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install system dependencies
+# System Build Dependencies for Scikit-Learn / Joblib
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
-    curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Set environment variables for model caching
-ENV HF_HOME=/app/model_cache
-ENV PYTHONUNBUFFERED=1
+# Pre-Install PyTorch with CUDA 12.4 capability to exploit Host Passthrough via WSL2/NVIDIA drivers
+RUN pip install --no-cache-dir torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
 
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-
+# The volume maps over this dynamically for hot-reloading context later
 COPY . .
 
-# Expose port
+# Scrub the requirements.txt file of the hardcoded CPU extra-index-url flag safely
+# This avoids accidentally ruining the bare-metal local development environment
+RUN sed -i '/extra-index-url.*cpu/d' requirements.txt && \
+    sed -i '/torch$/d' requirements.txt && \
+    pip install --no-cache-dir -r requirements.txt
+
 EXPOSE 8000
 
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]

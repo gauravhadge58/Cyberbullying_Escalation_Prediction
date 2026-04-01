@@ -97,7 +97,7 @@ def train_models(file: UploadFile = File(...)):
     
     escalation_metrics = {}
     if "conversation_id" in df.columns:
-        escalation_metrics = escalation.train(df)
+        escalation_metrics = escalation.train(df, model_id=model_id)
         print(f"✅ Random Forest complete!")
         _training_progress["current"] = 100
 

@@ -1,0 +1,27 @@
+{
+    "active_id": "20260402_031357",
+    "models": [
+        {
+            "id": "20260402_031357",
+            "trained_at": "2026-04-02 03:17:48",
+            "label": "Model Run 20260402_031357",
+            "rf_filename": null,
+            "encoder_filename": null,
+            "lstm_filename": "lstm_20260402_031357.pth",
+            "metrics": {
+                "num_conversations": 4022,
+                "lstm_accuracy": 0.9908005967180508,
+                "lstm_final_loss": 0.01684497315148052,
+                "rf_classes": [
+                    "HIGH",
+                    "LOW",
+                    "MEDIUM"
+                ]
+            },
+            "rf_available": false,
+            "lstm_available": true,
+            "lstm_accuracy": 0.9908005967180508,
+            "num_conversations": 4022
+        }
+    ]
+}

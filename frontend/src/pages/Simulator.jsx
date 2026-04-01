@@ -144,6 +144,14 @@ export default function Simulator() {
             : m
         ));
       }
+      
+      // Also update escalation level from HTTP response as a fallback if WebSocket is latent
+      if (res.data.conversations?.length > 0) {
+        const demoConvUpdate = res.data.conversations.find((c) => c.conversation_id === CONVERSATION_ID);
+        if (demoConvUpdate) {
+            setEscalationLevel(demoConvUpdate.escalation_level);
+        }
+      }
     } catch (err) {
       // Remove optimistic message on error
       setMessages(prev => prev.filter(m => m.messageId !== newMsg.id));
@@ -206,7 +214,7 @@ export default function Simulator() {
   // Determine header color based on escalation
   const headerColors = {
     LOW: "bg-success text-white",
-    MEDIUM: "bg-warning text-white",
+    MEDIUM: "bg-orange-500 text-white border-b-4 border-orange-600",
     HIGH: "bg-danger text-white border-b-4 border-red-700"
   };
 
