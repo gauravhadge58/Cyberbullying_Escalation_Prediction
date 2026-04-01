@@ -4,6 +4,7 @@ import Dashboard from "./pages/Dashboard";
 import Monitor from "./pages/Monitor";
 import Analytics from "./pages/Analytics";
 import Simulator from "./pages/Simulator";
+import Training from "./pages/Training";
 
 export default function App() {
   return (
@@ -14,6 +15,7 @@ export default function App() {
         <Route path="monitor" element={<Monitor />} />
         <Route path="analytics" element={<Analytics />} />
         <Route path="simulator" element={<Simulator />} />
+        <Route path="training" element={<Training />} />
       </Route>
     </Routes>
   );

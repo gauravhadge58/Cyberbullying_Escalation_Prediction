@@ -21,4 +21,10 @@ export const api = {
   },
   clearData: () => apiClient.delete("/conversations").then((res) => res.data),
   clearConversation: (id) => apiClient.delete(`/conversations/${id}`).then((res) => res.data),
+
+  // Model Registry
+  getTrainingProgress: () => apiClient.get("/train/progress").then((res) => res.data),
+  listModels: () => apiClient.get("/models").then((res) => res.data),
+  activateModel: (id) => apiClient.post(`/models/${id}/activate`).then((res) => res.data),
+  deleteModel: (id) => apiClient.delete(`/models/${id}`).then((res) => res.data),
 };
