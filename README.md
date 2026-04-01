@@ -4,9 +4,26 @@ A production-ready, full-stack application that detects cyberbullying in message
 
 ## 🧱 Architecture
 
-1. **Frontend (/frontend):** React, Vite, Tailwind CSS, Chart.js. Provides a live dashboard to monitor monitored conversations, upload training datasets, and view historical analytics.
-2. **Backend (/backend):** Node.js, Express, MongoDB, WebSockets. Acts as a middleware, persisting data to MongoDB and broadcasting real-time predictions to the dashboard.
-3. **ML Service (/ml-service):** Python, FastAPI, Scikit-learn, NLTK. Handles text preprocessing, logistic regression for detecting bullying, and contextual rule-based/random forest models for predicting escalation.
+![System Architecture](docs/architecture_diagram.png)
+
+> The diagram above shows all layers of the system and the data-flow between them.
+> To regenerate the diagram, run: `python docs/generate_architecture_diagram.py`
+
+The application is composed of four services orchestrated via Docker Compose:
+
+| Layer | Service | Technology | Port |
+|-------|---------|------------|------|
+| **Client** | Web Browser / React UI | React 18, Vite, Tailwind CSS, Chart.js | — |
+| **Frontend** | Dashboard & Pages | React Router DOM, Axios, Nginx | 5173 |
+| **Backend** | API & WebSocket server | Node.js, Express, MongoDB (Mongoose), ws | 5000 |
+| **ML Service** | Prediction & Training | Python 3.10, FastAPI, PyTorch, Scikit-learn, HuggingFace | 8000 |
+| **Database** | Persistence | MongoDB 6 | 27017 |
+
+### Key data flows
+
+1. **Prediction flow:** Browser → React → `POST /api/predict` (Backend :5000) → `POST /predict` (ML Service :8000) → BERT detection + Hybrid escalation → results persisted to MongoDB → broadcast via WebSocket to all clients.
+2. **Training flow:** CSV upload → React → `POST /api/train` (Backend) → `POST /train` (ML Service) → Phase 1 (BERT toxicity labels) → Phase 2 (Random Forest, 100 trees) → Phase 3 (PyTorch LSTM, 20 epochs) → models saved to `saved_models/` and registered.
+3. **Analytics flow:** React → `GET /api/stats` (Backend) → MongoDB aggregation → Chart.js visualisations.
 
 ---
 
