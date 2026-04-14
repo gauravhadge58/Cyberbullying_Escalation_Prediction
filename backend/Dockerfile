@@ -4,12 +4,11 @@ WORKDIR /app
 
 # Copy dependency configs
 COPY package*.json ./
-RUN npm install
+RUN npm install --omit=dev
 
-# Rest of application mapped via volumes
 COPY . .
 
 EXPOSE 5000
 
-# Runs via nodemon if in dependencies, or default npm start
-CMD ["npm", "run", "dev"]
+# Production: use node directly, not nodemon
+CMD ["npm", "start"]
