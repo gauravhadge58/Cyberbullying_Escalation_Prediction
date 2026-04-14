@@ -86,23 +86,8 @@ def train_models(file: UploadFile = File(...)):
     # Shared model ID (timestamp) for this training run
     model_id = datetime.now().strftime("%Y%m%d_%H%M%S")
 
-    # Train escalation model (Random Forest)
-    print(f"🚀 [2/3] Training Random Forest escalation model...")
-    _training_progress.update({
-        "phase": "rf",
-        "message": "Building ensemble decision boundaries...",
-        "current": 0,
-        "total": 100
-    })
-    
-    escalation_metrics = {}
-    if "conversation_id" in df.columns:
-        escalation_metrics = escalation.train(df, model_id=model_id)
-        print(f"✅ Random Forest complete!")
-        _training_progress["current"] = 100
-
-    # Train LSTM model
-    print(f"🚀 [3/3] Training LSTM sequential model on GPU...")
+    # Train LSTM model FIRST — its output becomes the 10th feature for the RF meta-learner
+    print(f"🚀 [2/3] Training LSTM sequential model on GPU...")
     _training_progress.update({
         "phase": "lstm",
         "message": "Propagating temporal escalation gradients on GPU...",
@@ -117,6 +102,22 @@ def train_models(file: UploadFile = File(...)):
     lstm_metrics = {}
     if "conversation_id" in df.columns:
         lstm_metrics = lstm.train(df, model_id=model_id, progress_cb=lstm_progress)
+    print(f"✅ LSTM training complete!")
+
+    # Train escalation model (Random Forest) — uses LSTM output as 10th feature
+    print(f"🚀 [3/3] Training Random Forest escalation meta-learner (fusing BERT + LSTM + stats)...")
+    _training_progress.update({
+        "phase": "rf",
+        "message": "Building ensemble decision boundaries with LSTM features...",
+        "current": 0,
+        "total": 100
+    })
+    
+    escalation_metrics = {}
+    if "conversation_id" in df.columns:
+        escalation_metrics = escalation.train(df, model_id=model_id)
+        print(f"✅ Random Forest complete!")
+        _training_progress["current"] = 100
 
     # Register in model registry
     print(f"💾 Registering new models with ID: {model_id}...")

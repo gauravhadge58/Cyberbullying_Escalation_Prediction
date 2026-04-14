@@ -147,6 +147,15 @@ def train(df: pd.DataFrame, model_id: str | None = None) -> dict:
     for conv_id, group in df.groupby("conversation_id"):
         feats = extract_conversation_features(group)
         feats["conversation_id"] = conv_id
+
+        # ── LSTM prediction as 10th feature (the RF meta-learner input) ──
+        try:
+            from . import lstm_model as lstm_mod
+            scores = group["toxicity_score"].fillna(0).tolist()
+            feats["lstm_pred"] = lstm_mod.predict_idx(scores)
+        except Exception:
+            feats["lstm_pred"] = 0
+
         # Use rule-based label if escalation_level not present
         if "escalation_level" in group.columns and group["escalation_level"].notna().any():
             feats["label"] = group["escalation_level"].mode()[0]
@@ -156,7 +165,8 @@ def train(df: pd.DataFrame, model_id: str | None = None) -> dict:
     
     feat_df = pd.DataFrame(feature_rows)
     feature_cols = ["avg_toxicity", "max_toxicity", "toxicity_trend", "avg_sentiment",
-                    "sentiment_trend", "abusive_freq", "bully_ratio", "repeated_target", "message_count"]
+                    "sentiment_trend", "abusive_freq", "bully_ratio", "repeated_target",
+                    "message_count", "lstm_pred"]  # 10th feature: LSTM sequential output
     
     X = feat_df[feature_cols].fillna(0).values
     le = LabelEncoder()
@@ -207,6 +217,14 @@ def predict_conversation(messages: list[dict]) -> dict:
     
     features = extract_conversation_features(df)
     feat_dict = features.to_dict()
+
+    # ── LSTM prediction as 10th feature ──
+    try:
+        from . import lstm_model as lstm_mod
+        tox_scores = df["toxicity_score"].fillna(0).tolist()
+        feat_dict["lstm_pred"] = lstm_mod.predict_idx(tox_scores)
+    except Exception:
+        feat_dict["lstm_pred"] = 0
     
     # Try ML model first, fall back to rule-based
     paths = registry.get_active_model_paths()
@@ -215,7 +233,8 @@ def predict_conversation(messages: list[dict]) -> dict:
             clf = joblib.load(paths["rf"])
             le = joblib.load(paths["encoder"])
             feature_cols = ["avg_toxicity", "max_toxicity", "toxicity_trend", "avg_sentiment",
-                            "sentiment_trend", "abusive_freq", "bully_ratio", "repeated_target", "message_count"]
+                            "sentiment_trend", "abusive_freq", "bully_ratio", "repeated_target",
+                            "message_count", "lstm_pred"]  # 10-feature vector
             X = np.array([[feat_dict.get(c, 0) for c in feature_cols]])
             pred = clf.predict(X)[0]
             level = le.inverse_transform([pred])[0]

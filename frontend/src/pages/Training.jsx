@@ -129,9 +129,9 @@ export default function Training() {
     );
 
     const phases = [
-      { id: "bert", label: "BERT Detection", icon: "🤖" },
-      { id: "rf", label: "Random Forest Ensemble", icon: "🌲" },
-      { id: "lstm", label: "LSTM Deep Learning", icon: "🧠" }
+      { id: "bert", label: "BERT Semantic Analysis", icon: "🤖" },
+      { id: "lstm", label: "LSTM Sequential Model", icon: "🧠" },
+      { id: "rf",   label: "Random Forest Meta-Learner", icon: "🌲" }
     ];
 
     const currentIdx = phases.findIndex(p => p.id === trainingProgress.phase);

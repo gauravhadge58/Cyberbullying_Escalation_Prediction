@@ -1,5 +1,5 @@
 {
-    "active_id": "20260402_031357",
+    "active_id": "20260414_085609",
     "models": [
         {
             "id": "20260402_031357",
@@ -21,6 +21,28 @@
             "rf_available": false,
             "lstm_available": true,
             "lstm_accuracy": 0.9908005967180508,
+            "num_conversations": 4022
+        },
+        {
+            "id": "20260414_085609",
+            "trained_at": "2026-04-14 09:00:49",
+            "label": "Model Run 20260414_085609",
+            "rf_filename": "rf_20260414_085609.joblib",
+            "encoder_filename": "enc_20260414_085609.joblib",
+            "lstm_filename": "lstm_20260414_085609.pth",
+            "metrics": {
+                "num_conversations": 4022,
+                "lstm_accuracy": 0.9955246146195923,
+                "lstm_final_loss": 0.010991908161016218,
+                "rf_classes": [
+                    "HIGH",
+                    "LOW",
+                    "MEDIUM"
+                ]
+            },
+            "rf_available": true,
+            "lstm_available": true,
+            "lstm_accuracy": 0.9955246146195923,
             "num_conversations": 4022
         }
     ]

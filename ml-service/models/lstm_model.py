@@ -39,6 +39,7 @@ def prepare_sequence(scores):
 
 _cached_model = None
 _cached_path = None
+_last_trained_model = None  # Holds the most recently trained model in-memory for RF feature extraction
 
 def get_lstm_model():
     global _cached_model, _cached_path
@@ -122,6 +123,10 @@ def train(df: pd.DataFrame, model_id: str | None = None, progress_cb=None) -> di
             print(f"  LSTM Epoch [{epoch+1}/{num_epochs}] — Loss: {avg_loss:.4f}")
 
     model.eval()
+
+    # Cache for immediate use by downstream RF training (no disk round-trip needed)
+    global _last_trained_model
+    _last_trained_model = model
     correct = 0
     final_loss = 0.0
     with torch.no_grad():
@@ -162,3 +167,19 @@ def predict_escalation(toxicity_scores: list[float]) -> str:
         out = model(seq)
         pred = torch.argmax(out, dim=1).item()
         return IDX_TO_LABEL.get(pred, "LOW")
+
+
+def predict_idx(toxicity_scores: list[float], model=None) -> int:
+    """
+    Returns LSTM's escalation prediction as an integer (0=LOW, 1=MEDIUM, 2=HIGH).
+    Used as the 10th feature in the Random Forest meta-learner.
+    Falls back to 0 (LOW) if no model is available.
+    """
+    if model is None:
+        model = _last_trained_model or get_lstm_model()
+    if model is None:
+        return 0
+    with torch.no_grad():
+        seq = prepare_sequence(toxicity_scores).to(DEVICE)
+        out = model(seq)
+        return int(torch.argmax(out, dim=1).item())
