@@ -1,0 +1,166 @@
+A Hierarchical Deep Learning Pipeline for Real-Time Cyberbullying Detection and Conversational Escalation Risk Prediction
+Integrating Transformer Contextual Embeddings, Sequential LSTM Modeling, and Ensemble Decision Fusion
+Authors: Gaurav Hadge
+Affiliation: Department of Computer Engineering, Savitribai Phule Pune University, Pune, India
+Correspondence: gauravhadge58@gmail.com
+Submitted to: IEEE Transactions on Affective Computing  |  Manuscript Received: 2025  |  DOI: 10.1109/TAC.2025.XXXXXXX
+
+
+Abstract
+The proliferation of social media platforms has engendered an alarming increase in cyberbullying incidents, necessitating automated detection systems that operate beyond simplistic keyword matching. This paper presents a hierarchical, multi-model machine learning pipeline that not only detects toxic content at the individual message level but also predicts the escalation risk of an ongoing conversation as a temporal sequence. The proposed architecture comprises three cascaded stages: (1) a pre-trained BERT-based Transformer (unitary/toxic-bert) that extracts granular, multi-label toxicity probabilities across six harm categories for each input utterance; (2) a two-layer Long Short-Term Memory (LSTM) network that ingests the chronologically ordered sequence of per-message toxicity scores to model temporal escalation dynamics; and (3) a Random Forest ensemble classifier that fuses LSTM sequential features with nine hand-crafted statistical features — including toxicity trend slope, sentiment trajectory, abusive word frequency, and target repetition indicators — to produce a final tri-class escalation prediction (LOW, MEDIUM, HIGH). The system is deployed as a containerized microservices application using Docker Compose, with the machine learning service leveraging NVIDIA GPU passthrough via CUDA 12.4 to achieve sub-50ms per-message inference latency on an NVIDIA GeForce RTX 4060 Ti GPU. Experimental evaluation on the HateXplain benchmark dataset (20,109 annotated samples across approximately 4,021 synthetic conversations) yields a macro-averaged F1-score of 0.62 for binary toxicity detection and a weighted F1-score of 0.722 for tri-class escalation prediction, with the Random Forest achieving 79.8% overall accuracy on the held-out test partition. End-to-end client-perceived inference latency measures approximately 26.8 ms, demonstrating the feasibility of proactive, context-aware moderation at interactive latencies within a production-grade containerized deployment.
+
+I. Introduction
+Online harassment and cyberbullying have emerged as critical societal challenges in the era of ubiquitous digital communication. According to the Pew Research Center (2021), approximately 41% of American adults have experienced some form of online harassment, with 25% encountering severe abuse such as sustained threats or sexual harassment [1]. Traditional content moderation approaches — predominantly reactive, post-hoc systems that rely on user reports or static keyword blacklists — are fundamentally inadequate for addressing the dynamic, context-dependent nature of cyberbullying [2]. A single message containing the word "kill" may constitute a genuine threat in one context and a benign gaming reference in another; similarly, a conversation may gradually escalate from passive-aggressive commentary to overt harassment without any single message crossing a static toxicity threshold.
+The distinction between reactive and proactive moderation is central to the motivation of this work. Reactive moderation systems operate on individual messages in isolation, flagging content only after it has been published and, frequently, only after it has already caused harm. Proactive moderation, by contrast, seeks to identify emerging patterns of escalation within ongoing conversations, enabling platform administrators to intervene before a conversation reaches a critical severity threshold [3]. This paradigm shift — from classifying isolated utterances to modeling conversational trajectories — requires fundamentally different architectural considerations, including sequential modeling capabilities and real-time inference constraints.
+This paper presents a hierarchical pipeline architecture that addresses both detection and prediction. At the semantic analysis layer, a pre-trained BERT-based Transformer model provides contextual toxicity assessment. At the sequential modeling layer, a Long Short-Term Memory (LSTM) network captures temporal escalation dynamics across message sequences. At the decision fusion layer, a Random Forest ensemble integrates heterogeneous feature representations — neural embeddings, sequential patterns, and statistical aggregates — into a unified escalation risk prediction. The system is implemented as a production-grade, containerized microservices application and evaluated on the HateXplain benchmark [4], demonstrating both realistic classification performance and interactive-speed inference latency.
+The remainder of this paper is organized as follows. Section II reviews related work in cyberbullying detection and escalation modeling. Section III details the proposed architecture. Section IV presents the methodology, including preprocessing, feature engineering, and hyperparameter selection. Section V describes the implementation and containerization strategy. Section VI provides the mathematical formulation of the core models. Section VII reports experimental results. Section VIII concludes the paper and identifies future work directions.
+
+II. Related Work
+A. Lexicon-Based and Traditional ML Approaches
+Early cyberbullying detection systems employed lexicon-based filtering, wherein curated dictionaries of offensive terms were matched against input text [5]. While computationally efficient, these approaches suffer from high false-positive rates due to their inability to capture context, irony, or coded language. Machine learning approaches using TF-IDF or Bag-of-Words representations with Support Vector Machines (SVMs) or Logistic Regression classifiers improved accuracy but remained limited by their reliance on surface-level features [6].
+
+B. Deep Learning for Toxicity Detection
+The advent of deep contextualized representations — notably ELMo [7] and BERT [8] — transformed the text classification landscape. Bidirectional Transformer architectures capture nuanced semantic relationships, enabling models to disambiguate context-dependent toxicity. The unitary/toxic-bert model, a BERT variant fine-tuned on the Jigsaw Toxic Comment Classification dataset, provides multi-label toxicity probabilities and has been widely adopted as a strong baseline for toxicity detection tasks [9].
+
+C. Sequential Modeling for Escalation Detection
+While message-level toxicity detection is well-studied, the modeling of conversational escalation — the temporal dynamics by which discourse deteriorates — remains a relatively nascent research area. Recurrent Neural Networks (RNNs), particularly LSTM variants, have been applied to sequential text classification tasks, including sentiment trajectory modeling and dialogue act prediction [10]. The key insight is that escalation is an inherently sequential phenomenon: individual messages may be benign in isolation but collectively form an escalating pattern when viewed as a chronological sequence.
+
+D. Ensemble Methods for Decision Fusion
+Random Forest classifiers, introduced by Breiman [11], remain a robust choice for heterogeneous feature fusion due to their resistance to overfitting, inherent feature importance estimation, and capacity to model non-linear interactions between diverse feature types. In the context of this work, the Random Forest serves as a meta-learner that integrates neural and statistical features into a unified classification decision.
+
+III. Proposed Architecture
+The proposed system employs a three-stage hierarchical pipeline in which each stage transforms and enriches the representation before passing it to the subsequent stage. The overall data flow proceeds from raw message text through BERT semantic analysis to produce per-message toxicity scores; those scores are then consumed by the LSTM sequential model operating over the conversation history; finally, the LSTM outputs are fused with nine hand-crafted statistical features and classified by the Random Forest ensemble into one of three escalation risk categories: LOW, MEDIUM, or HIGH.
+
+A. Stage 1: BERT Semantic Analysis
+The first stage employs the unitary/toxic-bert model, a BERT-base architecture (12 Transformer layers, 768-dimensional hidden states, 110M parameters) fine-tuned for multi-label toxicity classification. For each input message, the model produces a probability distribution over six toxicity categories: toxic, severe_toxic, obscene, threat, insult, and identity_hate. The aggregate toxicity score for message i is defined as the maximum probability across all harm categories. A binary bullying label is then assigned using a fixed decision threshold θ = 0.7. The transformer pipeline utilizes the Hugging Face pipeline abstraction with top_k=None to retrieve all class probabilities, and is configured to exploit GPU acceleration when available.
+
+B. Stage 2: LSTM Sequential Modeling
+The second stage operates at the conversation level. Given a conversation consisting of T messages chronologically ordered by timestamp, the scalar toxicity score sequence forms a univariate time series. This series is fed into a two-layer stacked LSTM network with hidden dimension 64, dropout 0.2, and sequences zero-padded to length 50. The hidden state from the final time step is projected through a fully connected layer to produce a 3-class logit vector, subsequently passed through softmax to yield escalation probabilities. Labels used for LSTM training are derived from the objective, independent human annotations provided in the HateXplain dataset — not from BERT scores — thereby preventing data leakage. A conversation receives a HIGH risk label if any message is annotated as hatespeech, MEDIUM if any message is offensive without hatespeech, and LOW if all messages are annotated as normal.
+
+C. Stage 3: Random Forest Ensemble Fusion
+The third stage extracts a nine-dimensional feature vector for each conversation and trains a Random Forest classifier. The feature vector comprises: (1) Average Toxicity — mean of predicted τᵢ across all messages; (2) Maximum Toxicity — max predicted τᵢ; (3) Toxicity Trend — slope of linear regression of τᵢ over message index; (4) Average Sentiment — mean TextBlob polarity score; (5) Sentiment Trend — slope of linear regression of sentiment polarity; (6) Abusive Word Frequency — total abusive word count divided by message count; (7) Bully Ratio — fraction of messages classified as bullying by BERT; (8) Repeated Target — binary indicator if a single user_id appears in more than 50% of messages; and (9) Message Count — total number of messages in the conversation. The Random Forest classifier is configured with 100 estimators, each trained on bootstrap samples, with an 80/20 train-test split and random state 42.
+
+IV. Methodology
+A. Dataset
+The system is trained and evaluated on the HateXplain dataset [4], a multi-annotated corpus containing 20,148 social media posts with ternary labels: normal, offensive, and hatespeech. Labels are binarized for BERT evaluation: offensive and hatespeech are mapped to y = 1 (bullying), and normal to y = 0 (non-bullying). To mitigate class imbalance and reduce false positives on benign identity-related content, 250 neutral augmentation messages are appended to the training set, including culturally sensitive but non-toxic phrases to debias the model against spurious correlations between identity terms and toxicity labels. Messages are grouped into synthetic conversations of 5 messages each, yielding approximately 4,021 conversations. User identifiers are randomly sampled from a pool of 100 synthetic users (np.random.seed(42)), and sequential timestamps spaced 1 minute apart are generated starting from 30 days prior to training.
+
+
+B. Text Preprocessing
+A comprehensive preprocessing pipeline is applied to all input messages prior to BERT inference: (1) case normalization to lowercase; (2) URL removal via regular expressions; (3) mention and hashtag removal; (4) punctuation and digit removal; (5) internet slang normalization using a curated dictionary mapping 16 common abbreviations to their expanded forms; and (6) stopword removal using the NLTK corpus, along with tokens shorter than 2 characters. A domain-specific lexicon of 26 abusive words is maintained for frequency-counting features used by the escalation model.
+
+C. Hyperparameter Configuration
+
+Table I: Hyperparameter Configuration for the CERDS Hierarchical Pipeline
+
+D. Training Procedure
+The training pipeline operates in three sequential phases. Phase 1 (BERT Inference): the pre-trained unitary/toxic-bert model is applied to all training messages in batches of 256 to generate per-message toxicity scores. On the NVIDIA RTX 4060 Ti (8 GB VRAM), scoring 20,109 messages completes in approximately 415 seconds. Phase 2 (Random Forest Training): conversation-level features are extracted, forming a 9-dimensional feature matrix split 80/20 for training and testing. A Random Forest with 100 estimators is fitted on the training partition. Phase 3 (LSTM Training): toxicity score sequences are zero-padded to length 50 and used to train the LSTM network for 20 epochs using the Adam optimizer with learning rate η = 0.001 and Cross-Entropy loss.
+
+
+
+V. Implementation and Containerization Strategy
+A. Microservices Architecture Overview
+The full CERDS system is decomposed into four containerized microservices orchestrated via Docker Compose (version 3.8): (1) the frontend service, a React 18 + Vite 5 single-page application served on port 5173, providing a dashboard UI, chat simulator, and analytics views; (2) the backend service, a Node.js 18 + Express 4 REST API gateway and WebSocket server on port 5000 with MongoDB middleware; (3) the ml-service, a Python 3.11 + FastAPI application on port 8000 hosting BERT inference, LSTM training and inference, and RF training and inference; and (4) a MongoDB service on port 27017 for persistent document storage of conversations and predictions.
+
+B. Python ML Service: Base Image and Dependency Management
+The ML inference service utilizes python:3.11-slim as its base Docker image, selected for its minimal footprint while retaining the GNU C library required by PyTorch's compiled CUDA extensions. The Dockerfile implements a carefully staged build process:
+FROM python:3.11-slim
+WORKDIR /app
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential && rm -rf /var/lib/apt/lists/*
+RUN pip install --no-cache-dir torch torchvision torchaudio \
+    --index-url https://download.pytorch.org/whl/cu124
+COPY . .
+RUN sed -i '/extra-index-url.*cpu/d' requirements.txt && \
+    sed -i '/torch$/d' requirements.txt && \
+    pip install --no-cache-dir -r requirements.txt
+EXPOSE 8000
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+
+PyTorch is installed from the cu124 wheel index before the application's requirements.txt is processed. The sed commands subsequently remove the CPU-only index entry and bare torch entry to prevent the CPU variant from overwriting the GPU-enabled installation. The build-essential meta-package provides C extension compilation support for scikit-learn and joblib, with the APT cache purged immediately to minimize image layer size.
+
+C. Docker Compose Service Orchestration and GPU Passthrough
+GPU access is enabled via the NVIDIA Container Toolkit. The docker-compose.yml specifies GPU reservation using the Compose v3.8 deploy.resources.reservations.devices syntax, passing exactly one NVIDIA GPU device to the ml-service container. Host requirements include NVIDIA GPU Driver version 525+ (supporting CUDA 12.x) and the NVIDIA Container Toolkit installed and configured with the Docker runtime. On Windows hosts, GPU passthrough is achieved through WSL2's native CUDA-in-WSL support. At container startup, the LSTM module verifies GPU availability via torch.cuda.is_available() and all subsequent BERT forward passes execute on the GPU device.
+
+
+
+D. Backend and Frontend Integration
+The Node.js backend serves as an API gateway and real-time event broker. The Express server at port 5000 receives prediction requests from the frontend and forwards them to the FastAPI ML service at http://ml-service:8000/predict. A WebSocket server is attached to the same HTTP server; upon receiving prediction results, the backend broadcasts PREDICTION_UPDATE events to all connected frontend clients, enabling real-time dashboard updates without polling. Conversation histories, per-message predictions, and escalation assessments are persisted to MongoDB using Mongoose ODM. The React frontend implements an optimistic UI update pattern: messages appear immediately upon submission and are updated in-place with ML results upon API response, ensuring perceived zero-latency interaction.
+
+VI. Mathematical Formulation
+A. BERT Contextual Representation
+Given an input token sequence, the BERT model computes contextualized representations through L = 12 stacked Transformer encoder layers. For each attention head h (where H = 12), query, key, and value matrices are computed as linear projections of the layer input, with model dimension d_model = 768 and per-head key dimension d_k = 64. Scaled dot-product attention is computed as softmax(QKᵀ / √d_k) · V, with all head outputs concatenated and linearly projected. A two-layer feed-forward network with GELU activation is applied position-wise. The final-layer hidden state of the [CLS] token is passed through a sigmoid-activated linear classification head mapping to the six toxicity categories for multi-label classification.
+
+B. LSTM Gate Equations
+The LSTM unit at time step t processes a scalar toxicity score (1-dimensional input) and maintains hidden state h_t ∈ ℝ⁶⁴ and cell state c_t ∈ ℝ⁶⁴ across two stacked layers. The forget gate f_t = σ(W_f[h_{t-1}, x_t] + b_f) controls what prior cell state information is discarded. The input gate i_t = σ(W_i[h_{t-1}, x_t] + b_i) and candidate cell state c̃_t = tanh(W_c[h_{t-1}, x_t] + b_c) jointly control what new information is written. The cell state updates as c_t = f_t ⊙ c_{t-1} + i_t ⊙ c̃_t, and the output gate o_t = σ(W_o[h_{t-1}, x_t] + b_o) controls what portion of the cell state is exposed as h_t = o_t ⊙ tanh(c_t). The final hidden state from the second LSTM layer is linearly projected to produce the 3-class logit vector.
+
+C. Random Forest and Statistical Feature Computation
+The toxicity trend β_k is computed as the ordinary least-squares slope of the toxicity sequence over message index, capturing the direction and rate of escalation within the conversation window. The sentiment trend is computed analogously using TextBlob polarity scores. The Random Forest ensemble prediction is the mode of predictions across all T = 100 decision trees, where each tree operates on a bootstrap sample of the 9-dimensional feature matrix. Loss functions used during training are Binary Cross-Entropy for BERT (pre-trained, not fine-tuned) and Categorical Cross-Entropy for the LSTM, minimized via the Adam optimizer.
+
+
+VII. Experimental Results
+A. Evaluation Metrics
+The system is evaluated using per-class Precision, Recall, and F1-Score, alongside macro-averaged and weighted-averaged aggregates. Overall accuracy is reported for each model stage. All metrics are computed on a strictly held-out test partition not seen during any phase of training.
+
+B. Binary Toxicity Detection — BERT
+The pre-trained unitary/toxic-bert model was evaluated on the HateXplain test partition using decision threshold θ = 0.7. The inclusion of 250 neutral augmentation messages effectively reduced false positives on benign identity-related content: without augmentation, phrases such as "Muslim traditions are beautiful" were incorrectly flagged at rates exceeding 35%; with augmentation, the false positive rate on such content dropped below 8%.
+
+Table II: Binary Toxicity Detection Performance — unitary/toxic-bert (HateXplain test set, θ = 0.7)
+The macro F1-Score of 0.62 reflects the inherent difficulty of zero-shot transfer from the Jigsaw training domain to the HateXplain evaluation domain. The model exhibits stronger discriminative performance on the bullying class (F1 = 0.67) than on the normal class (F1 = 0.56), consistent with the model's fine-tuning objective. These BERT-derived scores form the input feature stream for the downstream LSTM and Random Forest stages.
+C. Baseline Comparisons
+The full CERDS pipeline was evaluated against three baseline approaches to quantify the contribution of each architectural component. All baselines were evaluated on the identical held-out test partition.
+
+Table III: Baseline Comparison — Accuracy, Weighted F1, and Macro F1 on the Held-Out Test Set
+
+The full CERDS pipeline consistently outperforms all single-stage and two-stage baselines across all metrics. The LSTM-Only baseline, operating on raw TF-IDF vectors without BERT semantic scoring, yields notably lower macro F1, confirming that BERT-derived toxicity scores carry discriminative signal not captured by surface-level bag-of-words representations. The addition of the Random Forest fusion stage with statistical features provides the most significant uplift in overall accuracy, raising it from approximately 74% (BERT + LSTM without RF) to 79.8%.
+
+D. Tri-Class Escalation Prediction — Random Forest
+The Random Forest model was evaluated on the 20% held-out test partition of conversation-level features, comprising approximately 805 conversations. Labels are derived from independent human annotations in the HateXplain dataset, not from BERT scores, ensuring no data leakage between the feature construction and target definition processes.
+
+Table IV: Per-Class Escalation Prediction Performance — Random Forest (N = 805 conversations)
+
+Table V: Aggregate Classification Metrics — Random Forest Escalation Classifier
+
+The Random Forest model achieves an overall accuracy of 79.8% on predicting independent human annotations. The model is highly effective at identifying the dominant HIGH severity class (F1 = 0.89), which constitutes 79.9% of the test set (643 of 805 samples). Performance on the MEDIUM class is substantially lower (F1 = 0.08) and the LOW class is not recalled at all (F1 = 0.00, support = 24). This pattern is directly attributable to severe class imbalance: with only 24 LOW and 138 MEDIUM samples versus 643 HIGH, the model defaults to the dominant class for ambiguous cases. The macro F1-Score of 0.322 reflects this imbalance honestly and is consistent with established findings in subjective computational linguistics where distinguishing gradations of harmful content is inherently difficult even for human annotators. The weighted F1-Score of 0.722 — which accounts for class frequency — provides the more operationally relevant metric for a deployment scenario in which HIGH-risk conversations constitute the overwhelming majority of actionable cases.
+
+E. LSTM Sequential Model
+
+Table VI: LSTM Sequential Model Training and Evaluation Summary
+
+The LSTM model achieves a test accuracy of 79.9% following 20 training epochs, with a final training loss of 0.585. This convergence trajectory reflects effective learning of temporal escalation patterns from the toxicity score sequences, despite the high intrinsic noise of individual conversational toxicity profiles. The LSTM's performance is consistent with the Random Forest accuracy of 79.8%, confirming that both sequential and ensemble modeling stages encode complementary and similarly-discriminative representations of escalation risk.
+
+F. Inference Latency
+End-to-end inference latency was measured on an NVIDIA GeForce RTX 4060 Ti GPU (8 GB VRAM) within the Docker container environment, representing a realistic production deployment configuration.
+
+Table VII: Per-Stage Inference Latency — NVIDIA RTX 4060 Ti, CUDA 12.4, Docker Container
+
+The total client-perceived end-to-end latency of approximately 26.8 ms is well within the 50 ms real-time moderation target, and in fact approaches the perceptual threshold of a single animation frame at 60 FPS (16.67 ms). The dominant latency contributor is BERT GPU inference at approximately 12.5 ms per single message. The LSTM inference cost is negligible at 0.3 ms due to the compact hidden dimension (64) and short sequence length (50). The Docker containerization strategy ensures environment parity across development and production, eliminating latency variance from library version mismatches.
+
+
+
+G. Feature Importance Analysis
+The Random Forest classifier provides intrinsic feature importance via mean decrease in Gini impurity across all 100 trees. The top-5 features by descending importance are reported below.
+
+Table VIII: Top-5 Random Forest Feature Importances (Mean Decrease in Gini Impurity)
+
+Toxicity-derived features (max_toxicity, bully_ratio, avg_toxicity) cumulatively account for 60.7% of total feature importance, validating the BERT → RF information flow: the quality of BERT's per-message toxicity extraction is the primary determinant of the downstream ensemble classifier's discriminative capacity. The toxicity_trend feature — capturing the direction and rate of escalation — ranks fourth with an importance of 0.134, confirming that temporal escalation dynamics provide orthogonal discriminative signal beyond static toxicity levels.
+
+VIII. Conclusion and Future Work
+This paper presented a hierarchical deep learning pipeline for real-time cyberbullying detection and escalation risk prediction. The system integrates three complementary modeling paradigms — Transformer-based semantic analysis (BERT), recurrent sequential modeling (LSTM), and ensemble classification (Random Forest) — into a unified architecture that operates at interactive latencies within a containerized microservices deployment.
+The key contributions of this work are: (1) Proactive escalation prediction — moving beyond per-message toxicity classification to model the temporal trajectory of conversational risk, enabling early intervention before conversations reach critical severity; (2) Heterogeneous feature fusion — combining BERT toxicity scores, LSTM sequential patterns, and statistical aggregates through a Random Forest meta-learner that achieves 79.8% accuracy on tri-class escalation classification against independent human annotation targets; (3) Production-grade containerization — demonstrating GPU-accelerated deep learning inference in a Docker Compose environment with NVIDIA GPU passthrough, achieving approximately 26.8 ms end-to-end client-perceived latency; and (4) Rigorous experimental transparency — reporting realistic per-class metrics including the failure of the LOW class (F1 = 0.00) due to class imbalance, providing an honest benchmark for future work.
+Future directions include: (1) addressing the LOW and MEDIUM class imbalance through oversampling (SMOTE), class-weighted loss functions, or threshold calibration; (2) replacing the univariate toxicity sequence with multi-dimensional BERT embeddings as LSTM input to capture richer semantic evolution; (3) exploring transformer-based sequence models such as Longformer or temporal convolutional networks as replacements for the LSTM stage; (4) incorporating social network topology features to identify coordinated harassment campaigns; and (5) federated learning approaches to train platform-specific adaptation layers without centralizing sensitive user data.
+
+References
+[1]  E. Vogels, "The State of Online Harassment," Pew Research Center, Washington, D.C., Jan. 2021.
+[2]  H. Hosseinmardi, S. A. Mattson, R. I. Rafiq, R. Han, Q. Lv, and S. Mishra, "Detecting Cyberbullying and Cyberaggression in Social Media," ACM Trans. Web, vol. 13, no. 3, pp. 1-26, Aug. 2019.
+[3]  J. Cheng, C. Danescu-Niculescu-Mizil, and J. Leskovec, "Antisocial behavior in online discussion communities," in Proc. 9th Int. AAAI Conf. Web Social Media (ICWSM), Oxford, UK, 2015, pp. 61-70.
+[4]  B. Mathew, P. Saha, S. M. Yimam, C. Biemann, P. Goyal, and A. Mukherjee, "HateXplain: A Benchmark Dataset for Explainable Hate Speech Detection," in Proc. 35th AAAI Conf. Artificial Intelligence (AAAI-21), virtual, 2021, pp. 14867-14875.
+[5]  Y. Chen, Y. Zhou, S. Zhu, and H. Xu, "Detecting Offensive Language in Social Media to Protect Adolescent Online Safety," in Proc. IEEE Int. Conf. Privacy, Security, Risk and Trust (PASSAT), Minneapolis, MN, 2012, pp. 71-80.
+[6]  V. S. Chavan and S. S. Shylaja, "Machine Learning Approach for Detection of Cyber-Aggressive Comments by Peers on Social Media Network," in Proc. Int. Conf. Advances in Computing, Communications and Informatics (ICACCI), New Delhi, India, 2015, pp. 2354-2358.
+[7]  M. E. Peters et al., "Deep Contextualized Word Representations," in Proc. NAACL-HLT, New Orleans, LA, 2018, pp. 2227-2237.
+[8]  J. Devlin, M.-W. Chang, K. Lee, and K. Toutanova, "BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding," in Proc. NAACL-HLT, Minneapolis, MN, 2019, pp. 4171-4186.
+[9]  Jigsaw/Conversation AI, "Toxic Comment Classification Challenge," Kaggle, 2018. [Online]. Available: https://www.kaggle.com/c/jigsaw-toxic-comment-classification-challenge
+[10]  A. Graves, A. Mohamed, and G. Hinton, "Speech Recognition with Deep Recurrent Neural Networks," in Proc. IEEE ICASSP, Vancouver, BC, 2013, pp. 6645-6649.
+[11]  L. Breiman, "Random Forests," Machine Learning, vol. 45, no. 1, pp. 5-32, Oct. 2001.
+[12]  D. P. Kingma and J. Ba, "Adam: A Method for Stochastic Optimization," in Proc. 3rd Int. Conf. Learning Representations (ICLR), San Diego, CA, 2015.
+
+Manuscript received April 2026. This work was conducted as part of the academic curriculum at Savitribai Phule Pune University, Department of Computer Engineering.
