@@ -134,6 +134,39 @@ def rule_based_escalation(features: dict) -> str:
         return LEVEL_LOW
 
 
+def label_from_binary(group: pd.DataFrame) -> str | None:
+    """
+    Derive conversation-level escalation label from per-message binary labels.
+    Uses 'binary_label' (HateXplain) or 'label' column — whichever is present.
+
+    This is independent of the conversation-level features (toxicity_trend,
+    avg_sentiment, etc.) used to train the RF, so it breaks the circularity
+    that causes inflated accuracy when rule_based_escalation is used.
+
+    Thresholds:
+        > 50% bullying messages  → HIGH
+        > 20% bullying messages  → MEDIUM
+        otherwise                → LOW
+    Returns None if no suitable column is found.
+    """
+    bully_col = None
+    if "binary_label" in group.columns:
+        bully_col = "binary_label"
+    elif "label" in group.columns:
+        bully_col = "label"
+
+    if bully_col is None:
+        return None
+
+    bully_ratio = group[bully_col].astype(int).mean()
+    if bully_ratio > 0.5:
+        return LEVEL_HIGH
+    elif bully_ratio > 0.2:
+        return LEVEL_MEDIUM
+    else:
+        return LEVEL_LOW
+
+
 def train(df: pd.DataFrame, model_id: str | None = None) -> dict:
     """
     (Optional) Train a Random Forest escalation classifier.
@@ -156,11 +189,15 @@ def train(df: pd.DataFrame, model_id: str | None = None) -> dict:
         except Exception:
             feats["lstm_pred"] = 0
 
-        # Use rule-based label if escalation_level not present
+        # Label priority (avoids circular feature→label dependency):
+        # 1. Human-annotated escalation_level  (best — real ground truth)
+        # 2. Per-message binary_label/label     (independent from RF features)
+        # 3. Rule-based fallback               (last resort — circular, avoided)
         if "escalation_level" in group.columns and group["escalation_level"].notna().any():
             feats["label"] = group["escalation_level"].mode()[0]
         else:
-            feats["label"] = rule_based_escalation(feats.to_dict())
+            derived = label_from_binary(group)
+            feats["label"] = derived if derived is not None else rule_based_escalation(feats.to_dict())
         feature_rows.append(feats)
     
     feat_df = pd.DataFrame(feature_rows)
@@ -195,11 +232,16 @@ def train(df: pd.DataFrame, model_id: str | None = None) -> dict:
     joblib.dump(clf, rf_path)
     joblib.dump(le, enc_path)
     
+    # Extract overall accuracy from the report for the UI stats card
+    overall_accuracy = report.get("accuracy", None)
+
     return {
-        "report": report, 
+        "report": report,
         "classes": list(le.classes_),
         "rf_filename": rf_filename,
-        "enc_filename": enc_filename
+        "enc_filename": enc_filename,
+        "train_size": len(feat_df),          # number of conversations used for training
+        "accuracy": overall_accuracy,         # overall weighted accuracy (0-1)
     }
 
 

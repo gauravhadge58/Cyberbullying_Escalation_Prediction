@@ -44,6 +44,72 @@
             "lstm_available": true,
             "lstm_accuracy": 0.9955246146195923,
             "num_conversations": 4022
+        },
+        {
+            "id": "20260414_114820",
+            "trained_at": "2026-04-14 11:53:28",
+            "label": "Model Run 20260414_114820",
+            "rf_filename": "rf_20260414_114820.joblib",
+            "encoder_filename": "enc_20260414_114820.joblib",
+            "lstm_filename": "lstm_20260414_114820.pth",
+            "metrics": {
+                "num_conversations": 4022,
+                "lstm_accuracy": 0.9967677772252611,
+                "lstm_final_loss": 0.011559344571838917,
+                "rf_classes": [
+                    "HIGH",
+                    "LOW",
+                    "MEDIUM"
+                ]
+            },
+            "rf_available": true,
+            "lstm_available": true,
+            "lstm_accuracy": 0.9967677772252611,
+            "num_conversations": 4022
+        },
+        {
+            "id": "20260414_121131",
+            "trained_at": "2026-04-14 12:16:07",
+            "label": "Model Run 20260414_121131",
+            "rf_filename": "rf_20260414_121131.joblib",
+            "encoder_filename": "enc_20260414_121131.joblib",
+            "lstm_filename": "lstm_20260414_121131.pth",
+            "metrics": {
+                "num_conversations": 4022,
+                "lstm_accuracy": 0.9885629040278469,
+                "lstm_final_loss": 0.024338545946242567,
+                "rf_classes": [
+                    "HIGH",
+                    "LOW",
+                    "MEDIUM"
+                ]
+            },
+            "rf_available": true,
+            "lstm_available": true,
+            "lstm_accuracy": 0.9885629040278469,
+            "num_conversations": 4022
+        },
+        {
+            "id": "20260414_122648",
+            "trained_at": "2026-04-14 12:31:08",
+            "label": "Model Run 20260414_122648",
+            "rf_filename": "rf_20260414_122648.joblib",
+            "encoder_filename": "enc_20260414_122648.joblib",
+            "lstm_filename": "lstm_20260414_122648.pth",
+            "metrics": {
+                "num_conversations": 4022,
+                "lstm_accuracy": 0.988314271506713,
+                "lstm_final_loss": 0.027721897902714822,
+                "rf_classes": [
+                    "HIGH",
+                    "LOW",
+                    "MEDIUM"
+                ]
+            },
+            "rf_available": true,
+            "lstm_available": true,
+            "lstm_accuracy": 0.988314271506713,
+            "num_conversations": 4022
         }
     ]
 }
