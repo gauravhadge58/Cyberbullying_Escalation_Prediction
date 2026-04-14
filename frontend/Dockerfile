@@ -8,10 +8,12 @@ RUN npm install
 
 COPY . .
 
-# VITE_BACKEND_URL is injected at build time as a Docker build-arg
-# e.g. --build-arg VITE_BACKEND_URL=https://your-backend.onrender.com/api
+# VITE_BACKEND_URL and VITE_WS_URL are injected at build time as Docker build-args
 ARG VITE_BACKEND_URL=/api
 ENV VITE_BACKEND_URL=$VITE_BACKEND_URL
+
+ARG VITE_WS_URL=/ws
+ENV VITE_WS_URL=$VITE_WS_URL
 
 RUN npm run build
 
