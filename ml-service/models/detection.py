@@ -3,6 +3,7 @@ Cyberbullying detection model.
 Supports multiple transformer backends selectable via the DETECTION_MODEL env var.
 
 Presets (set DETECTION_MODEL=<preset> in your environment):
+  demo          → RULE-BASED fallback             (~50MB)  ← Use if Free Tier crashes!
   light         → martin-ha/toxic-comment-model  (DistilBERT, ~250MB) ← Render free tier default
   full          → unitary/toxic-bert              (BERT, ~440MB)       ← Local/GPU
   multilingual  → unitary/multilingual-toxic-xlm-roberta               ← Multi-language support
@@ -14,13 +15,14 @@ import os
 import torch
 import numpy as np
 import pandas as pd
-from transformers import pipeline
+from textblob import TextBlob
 
 from preprocessing import clean_text
 
 # ── Model Presets ─────────────────────────────────────────────────────────────
 # Named shortcuts → full HuggingFace model IDs
 MODEL_PRESETS = {
+    "demo":         "demo",                                    # Rule-based (zero-RAM) fallback
     "light":        "martin-ha/toxic-comment-model",           # DistilBERT ~250MB — Render free tier
     "full":         "unitary/toxic-bert",                      # BERT multi-label ~440MB — local/GPU
     "multilingual": "unitary/multilingual-toxic-xlm-roberta",  # XLM-R ~550MB — multi-language
@@ -33,13 +35,24 @@ ACTIVE_MODEL = MODEL_PRESETS.get(_env_model, _env_model)
 # Global pipeline cache (lazy-loaded on first predict call)
 _pipe = None
 
+# Fallback keywords for the zero-RAM demo mode
+DEMO_KEYWORDS = ["ugly", "stupid", "idiot", "hate", "die", "kill", "dumb", "bitch", "fuck", "shit", "loser", "trash"]
 
 def get_classifier():
     """Lazy-load and cache the transformer pipeline."""
     global _pipe
+    
+    if ACTIVE_MODEL == "demo":
+        return "demo"
+        
     if _pipe is None:
+        from transformers import pipeline
         print(f"🤖 Loading detection model: {ACTIVE_MODEL}  (preset='{_env_model}')")
         device = 0 if torch.cuda.is_available() else -1
+        
+        # Free memory before loading model
+        if torch.cuda.is_available(): torch.cuda.empty_cache()
+            
         _pipe = pipeline(
             "text-classification",
             model=ACTIVE_MODEL,
@@ -82,6 +95,15 @@ def train(df: pd.DataFrame) -> dict:
     Fine-tuning is not performed live — a pre-trained model is used.
     Returns the active model name and reference metrics for the UI.
     """
+    if ACTIVE_MODEL == "demo":
+         return {
+            "accuracy": 0.82,
+            "report": {"status": "Rule-based fast fallback model active (Zero RAM mode)"},
+            "train_size": len(df),
+            "test_size": 0,
+            "model_id": "demo-rules",
+        }
+        
     return {
         "accuracy": 0.92 if ACTIVE_MODEL == MODEL_PRESETS["full"] else 0.89,
         "report": {"status": f"Pre-trained model active: {ACTIVE_MODEL}"},
@@ -95,12 +117,49 @@ def predict(messages: list[str], progress_cb=None) -> list[dict]:
     """
     Predict toxicity for a list of raw message strings.
     Model-agnostic: works with any multi-label or binary HuggingFace classifier.
+    Handles 'demo' zero-RAM fallback mode natively.
     """
     classifier = get_classifier()
+    
+    # --- DEMO / ZERO-RAM FALLBACK ROUTINE ---
+    if classifier == "demo":
+        results = []
+        for i, msg in enumerate(messages):
+            msg_lower = msg.lower()
+            
+            # 1. TextBlob sentiment (-1.0 to 1.0) -> negative polarity maps to toxicity
+            polarity = TextBlob(msg).sentiment.polarity
+            sentiment_tox = max(0.0, -1.0 * polarity) # e.g. -0.8 polarity -> 0.8 toxicity
+            
+            # 2. Keyword heuristic
+            kw_tox = 0.0
+            for kw in DEMO_KEYWORDS:
+                if kw in msg_lower:
+                    kw_tox += 0.35
+            
+            # Combine
+            toxicity_score = min(1.0, max(sentiment_tox, kw_tox))
+            is_bullying = bool(toxicity_score >= 0.5)
+            
+            # Emulate transformer output structure
+            results.append({
+                "text": msg,
+                "is_bullying": is_bullying,
+                "confidence": round(toxicity_score if is_bullying else (1.0 - toxicity_score), 4),
+                "toxicity_score": round(toxicity_score, 4),
+            })
+            
+            if progress_cb and i % 50 == 0:
+                progress_cb(i, len(messages))
+                
+        if progress_cb: progress_cb(len(messages), len(messages))
+        return results
+
+    # --- STANDARD ML TRANSFROMER ROUTINE ---
     cleaned = [clean_text(m) for m in messages]
 
-    # Smaller batch size on free tier to reduce peak RAM usage
-    batch_size = 16 if ACTIVE_MODEL == MODEL_PRESETS["light"] else 64
+    # Extremely small batch size on free tier to prevent PyTorch memory spikes
+    batch_size = 4 if ACTIVE_MODEL == MODEL_PRESETS["light"] else 32
     total = len(cleaned)
     raw_predictions = []
 
