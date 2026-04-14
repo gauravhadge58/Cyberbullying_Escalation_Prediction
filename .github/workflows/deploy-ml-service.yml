@@ -1,0 +1,39 @@
+name: Sync ML-Service to HuggingFace Spaces
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'ml-service/**'
+  # Allows triggering this workflow manually from the Actions tab
+  workflow_dispatch:
+
+jobs:
+  sync-to-hub:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Push ml-service subdirectory to HuggingFace
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          # 1. Move into the ml-service directory
+          cd ml-service
+          
+          # 2. Initialize a brand new local git repository just for this folder
+          git init
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          
+          # 3. Add all files in the ml-service folder
+          git add .
+          git commit -m "Automated deployment from GitHub Actions (Commit: ${{ github.sha }})"
+          
+          # 4. Force push straight to the main branch of the HuggingFace space
+          # This guarantees HuggingFace always exactly mirrors the ml-service folder
+          git push --force https://gauravhadge58:$HF_TOKEN@huggingface.co/spaces/gauravhadge58/cyberbullying_ml_service HEAD:main
