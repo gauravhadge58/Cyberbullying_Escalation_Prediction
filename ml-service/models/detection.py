@@ -135,11 +135,11 @@ def predict(messages: list[str], progress_cb=None) -> list[dict]:
             kw_tox = 0.0
             for kw in DEMO_KEYWORDS:
                 if kw in msg_lower:
-                    kw_tox += 0.35
+                    kw_tox += 0.8  # Increased from 0.35 so a single word flags as highly toxic
             
             # Combine
             toxicity_score = min(1.0, max(sentiment_tox, kw_tox))
-            is_bullying = bool(toxicity_score >= 0.5)
+            is_bullying = bool(toxicity_score >= 0.7)
             
             # Emulate transformer output structure
             results.append({
