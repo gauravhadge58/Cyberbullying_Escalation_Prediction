@@ -18,6 +18,8 @@ RUN sed -i '/extra-index-url/d' requirements.txt && \
     pip install --no-cache-dir -r requirements.txt
 
 EXPOSE 8000
+EXPOSE 7860
 
-# Production: no --reload flag
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Production: no --reload flag. 
+# Defaults to 8000, but dynamically reads PORT so it works on HuggingFace Spaces (7860)
+CMD uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}
