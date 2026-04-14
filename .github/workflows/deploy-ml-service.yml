@@ -30,7 +30,11 @@ jobs:
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
           
-          # 3. Add all files in the ml-service folder
+          # 3. Add all files in the ml-service folder (Use LFS for big models!)
+          git lfs install
+          git lfs track "*.joblib"
+          git lfs track "*.pth"
+          git add .gitattributes
           git add .
           git commit -m "Automated deployment from GitHub Actions (Commit: ${{ github.sha }})"
           
