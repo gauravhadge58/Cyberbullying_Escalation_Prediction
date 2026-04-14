@@ -30,6 +30,9 @@ MODEL_PRESETS = {
 
 # Read from env; resolve preset alias or treat as raw model ID
 _env_model = os.getenv("DETECTION_MODEL", "light").strip()
+if not _env_model: 
+    _env_model = "light"
+
 ACTIVE_MODEL = MODEL_PRESETS.get(_env_model, _env_model)
 
 # Global pipeline cache (lazy-loaded on first predict call)
