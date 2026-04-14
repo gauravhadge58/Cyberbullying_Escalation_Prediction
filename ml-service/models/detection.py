@@ -60,8 +60,8 @@ def predict(messages: list[str], progress_cb=None) -> list[dict]:
     # Transformers can batch process
     cleaned = [clean_text(m) for m in messages]
     
-    # Process in batches to prevent freezing and show progress
-    batch_size = 512
+    # Process in batches to prevent freezing and out-of-memory (OOM) on GPUs
+    batch_size = 64
     total = len(cleaned)
     raw_predictions = []
     

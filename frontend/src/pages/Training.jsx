@@ -231,6 +231,31 @@ export default function Training() {
         <p className="mt-2 text-gray-500 font-medium">Upload a labelled dataset to re-train the Cyberbullying detection and escalation models.</p>
       </div>
 
+      {/* Pipeline Sequence Info */}
+      <div className="bg-primary-50/50 border border-primary-100 rounded-2xl p-6 relative overflow-hidden shadow-sm">
+        <div className="absolute -right-4 -top-4 text-primary-200/40 text-8xl z-0">⚙️</div>
+        <div className="relative z-10">
+          <h3 className="text-primary-800 font-bold mb-3 flex items-center gap-2">
+            <span className="text-xl">ℹ️</span> How the Training Pipeline Works
+          </h3>
+          <p className="text-primary-700 text-sm mb-4">When you upload a dataset, the system automatically executes a 3-stage hierarchical pipeline:</p>
+          <div className="grid md:grid-cols-3 gap-4">
+            <div className="bg-white/80 p-4 rounded-xl border border-primary-100 shadow-sm">
+              <div className="font-bold text-primary-800 border-b border-primary-100 pb-2 mb-2">1. BERT Analysis 🤖</div>
+              <p className="text-xs text-primary-700">Extracts semantic patterns and per-message toxicity scores using Transformer models on the GPU.</p>
+            </div>
+            <div className="bg-white/80 p-4 rounded-xl border border-primary-100 shadow-sm">
+              <div className="font-bold text-primary-800 border-b border-primary-100 pb-2 mb-2">2. LSTM Sequence 🧠</div>
+              <p className="text-xs text-primary-700">Learns temporal escalation patterns from the toxicity history of each conversation using deep learning.</p>
+            </div>
+            <div className="bg-white/80 p-4 rounded-xl border border-primary-100 shadow-sm">
+              <div className="font-bold text-primary-800 border-b border-primary-100 pb-2 mb-2">3. Random Forest 🌲</div>
+              <p className="text-xs text-primary-700">Acts as a meta-learner, fusing BERT and LSTM outputs with statistical features to output the final risk level.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Upload Section */}
       <div className="bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-gray-100 relative">
         <input 
