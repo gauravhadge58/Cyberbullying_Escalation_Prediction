@@ -21,5 +21,5 @@ EXPOSE 8000
 EXPOSE 7860
 
 # Production: no --reload flag. 
-# Defaults to 8000, but dynamically reads PORT so it works on HuggingFace Spaces (7860)
-CMD uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}
+# Defaults to 7860 for HuggingFace Spaces. Render will dynamically override this with its own PORT env var.
+CMD uvicorn main:app --host 0.0.0.0 --port ${PORT:-7860}
