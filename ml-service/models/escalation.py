@@ -268,9 +268,13 @@ def predict_conversation(messages: list[dict]) -> dict:
     except Exception:
         feat_dict["lstm_pred"] = 0
     
-    # Try ML model first, fall back to rule-based
+    # Minimum messages needed for the RF model to make reliable predictions.
+    # With fewer messages the RF fires false HIGH on benign short text (e.g. "hii", names).
+    MIN_MESSAGES_FOR_ML = 3
+    n_messages = int(feat_dict.get("message_count", 0))
+
     paths = registry.get_active_model_paths()
-    if paths and paths.get("rf") and paths.get("encoder"):
+    if paths and paths.get("rf") and paths.get("encoder") and n_messages >= MIN_MESSAGES_FOR_ML:
         try:
             clf = joblib.load(paths["rf"])
             le = joblib.load(paths["encoder"])
@@ -283,7 +287,11 @@ def predict_conversation(messages: list[dict]) -> dict:
         except Exception:
             level = rule_based_escalation(feat_dict)
     else:
+        # Too few messages — use rule-based and cap at MEDIUM
+        # (a 1-2 message conversation cannot meaningfully be HIGH escalation)
         level = rule_based_escalation(feat_dict)
+        if n_messages < MIN_MESSAGES_FOR_ML and level == LEVEL_HIGH:
+            level = LEVEL_MEDIUM
     
     # Map level to numeric score for UI display
     score_map = {LEVEL_LOW: 2, LEVEL_MEDIUM: 5, LEVEL_HIGH: 9}
