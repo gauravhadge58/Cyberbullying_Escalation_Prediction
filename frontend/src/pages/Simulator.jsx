@@ -23,15 +23,11 @@ export default function Simulator() {
   // Fetch initial messages for the demo room
   useEffect(() => {
     if (isJoined) {
-      axios.get(`${API_URL}/conversations`).then((res) => {
-        const demoConv = res.data.conversations.find((c) => c.conversationId === CONVERSATION_ID);
-        if (demoConv) {
-          setMessages(demoConv.messages || []);
-          // Do NOT restore old escalation level — always start fresh at LOW
-          // so stale HIGH from a previous session doesn't persist across logins
-          setEscalationLevel("LOW");
-        }
-      }).catch(console.error);
+      // Simulator always starts fresh — don't load old MongoDB messages.
+      // Each session is independent; old users/messages from previous sessions
+      // must not bleed in and corrupt the ML context for new predictions.
+      setMessages([]);
+      setEscalationLevel("LOW");
 
       // WebSocket connection
       const ws = new WebSocket(WS_URL);
