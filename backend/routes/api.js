@@ -38,14 +38,16 @@ router.post("/predict", async (req, res) => {
       });
     }
 
-    // Enhance payload with historical context for better escalation prediction
+    // Enhance payload with recent historical context only (last 2 hours).
+    // This prevents stale messages from old test sessions bleeding into new predictions.
     const conversationIds = [...new Set(messages.map(m => m.conversation_id))];
-    const histories = await Message.find({ 
-      conversationId: { $in: conversationIds } 
-    }).sort({ timestamp: -1 }).limit(50).lean();
+    const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
+    const histories = await Message.find({
+      conversationId: { $in: conversationIds },
+      timestamp: { $gte: twoHoursAgo },        // ← only recent messages
+    }).sort({ timestamp: 1 }).limit(100).lean();
 
-    // Merge history with new messages
-    // Note: We use Map to handle potential duplicates if ID is already in DB
+    // Merge history with new messages (Map deduplicates by message ID)
     const messageMap = new Map();
     histories.forEach(h => messageMap.set(h.messageId, {
       id: h.messageId,
@@ -54,7 +56,7 @@ router.post("/predict", async (req, res) => {
       message: h.text,
       timestamp: h.timestamp.toISOString()
     }));
-    
+
     messages.forEach(m => messageMap.set(m.id, m));
     const fullContext = Array.from(messageMap.values());
 
