@@ -27,4 +27,8 @@ export const api = {
   listModels: () => apiClient.get("/models").then((res) => res.data),
   activateModel: (id) => apiClient.post(`/models/${id}/activate`).then((res) => res.data),
   deleteModel: (id) => apiClient.delete(`/models/${id}`).then((res) => res.data),
+
+  // Gemini Chatbot
+  chat: (message, history = []) =>
+    apiClient.post("/chat", { message, history }).then((res) => res.data),
 };

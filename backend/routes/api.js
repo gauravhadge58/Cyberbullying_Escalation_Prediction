@@ -10,6 +10,7 @@ const router = express.Router();
 const Message = require("../models/Message");
 const Conversation = require("../models/Conversation");
 const muteManager = require("../utils/muteManager");
+const chatbot = require("../utils/chatbot");
 
 const ML_URL = process.env.ML_URL || "http://127.0.0.1:8000";
 
@@ -355,4 +356,48 @@ router.delete("/models/:id", async (req, res) => {
   }
 });
 
+// ─────────────────────────────────────────────
+// POST /api/chat
+// Gemini-powered chatbot with full project context.
+// Body: { message: string, history: Array }
+// ─────────────────────────────────────────────
+router.post("/chat", async (req, res) => {
+  try {
+    const { message, history = [] } = req.body;
+    if (!message || typeof message !== "string") {
+      return res.status(400).json({ error: "message (string) is required" });
+    }
+
+    // Fetch live stats to inject into Gemini system prompt
+    let stats = {};
+    try {
+      const totalMessages = await Message.countDocuments();
+      const bullyingCount = await Message.countDocuments({ isBullying: true });
+      const escalationDist = await Conversation.aggregate([
+        { $group: { _id: "$escalationLevel", count: { $sum: 1 } } },
+      ]);
+      const distMap = { LOW: 0, MEDIUM: 0, HIGH: 0 };
+      escalationDist.forEach((e) => { if (e._id) distMap[e._id] = e.count; });
+      stats = {
+        totalMessages,
+        bullyingCount,
+        bullyingPercentage: totalMessages > 0 ? ((bullyingCount / totalMessages) * 100).toFixed(1) : 0,
+        escalationDistribution: distMap,
+      };
+    } catch (_) {
+      // If DB is unavailable, proceed without live stats
+    }
+
+    const { reply, history: updatedHistory } = await chatbot.chat(message, history, stats);
+    res.json({ reply, history: updatedHistory });
+  } catch (err) {
+    console.error("Chat error:", err.message);
+    const userFacing = err.message.includes("GEMINI_API_KEY")
+      ? "Chatbot is not configured. Please add GEMINI_API_KEY to the backend .env file."
+      : "Chatbot error: " + err.message;
+    res.status(500).json({ error: userFacing });
+  }
+});
+
 module.exports = router;
+

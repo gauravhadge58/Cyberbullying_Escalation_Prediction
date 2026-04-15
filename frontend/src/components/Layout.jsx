@@ -1,4 +1,5 @@
 import { Link, Outlet, useLocation } from "react-router-dom";
+import ChatBot from "./ChatBot";
 import { useEffect, useState } from "react";
 
 const navItems = [
@@ -121,6 +122,9 @@ export default function Layout() {
           </div>
         </div>
       </main>
+
+      {/* Floating Gemini Chatbot — visible on all pages */}
+      <ChatBot />
     </div>
   );
 }
