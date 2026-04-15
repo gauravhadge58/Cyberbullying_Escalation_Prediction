@@ -38,35 +38,45 @@ router.post("/predict", async (req, res) => {
       });
     }
 
-    // Enhance payload with recent historical context only (last 2 hours).
-    // This prevents stale messages from old test sessions bleeding into new predictions.
-    const conversationIds = [...new Set(messages.map(m => m.conversation_id))];
-    const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
-    const histories = await Message.find({
-      conversationId: { $in: conversationIds },
-      timestamp: { $gte: twoHoursAgo },        // ← only recent messages
-    }).sort({ timestamp: 1 }).limit(100).lean();
+    // If the client sends new_message_id, it already provided full conversation context.
+    // Skip MongoDB enrichment to avoid mixing stale messages from old sessions.
+    const { new_message_id: newMessageId } = req.body;
 
-    // Merge history with new messages (Map deduplicates by message ID)
-    const messageMap = new Map();
-    histories.forEach(h => messageMap.set(h.messageId, {
-      id: h.messageId,
-      conversation_id: h.conversationId,
-      user_id: h.userId,
-      message: h.text,
-      timestamp: h.timestamp.toISOString()
-    }));
+    let fullContext;
+    if (newMessageId) {
+      // Simulator use case: client sent all messages + new one. Use as-is.
+      fullContext = messages;
+    } else {
+      // Live Monitor / API use case: enrich with recent DB history (last 2 hours).
+      const conversationIds = [...new Set(messages.map(m => m.conversation_id))];
+      const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
+      const histories = await Message.find({
+        conversationId: { $in: conversationIds },
+        timestamp: { $gte: twoHoursAgo },
+      }).sort({ timestamp: 1 }).limit(100).lean();
 
-    messages.forEach(m => messageMap.set(m.id, m));
-    const fullContext = Array.from(messageMap.values());
+      const messageMap = new Map();
+      histories.forEach(h => messageMap.set(h.messageId, {
+        id: h.messageId,
+        conversation_id: h.conversationId,
+        user_id: h.userId,
+        message: h.text,
+        timestamp: h.timestamp.toISOString()
+      }));
+      messages.forEach(m => messageMap.set(m.id, m));
+      fullContext = Array.from(messageMap.values());
+    }
 
     // Forward full context to ML service
     const mlResponse = await axios.post(`${ML_URL}/predict`, { messages: fullContext });
     const { messages: mlMsgResults, conversations: convResults } = mlResponse.data;
 
-    // We only want to return/save the NEW messages from the ML response
-    const newMsgIds = new Set(messages.map(m => m.id));
+    // Return/save only the truly new message(s)
+    const newMsgIds = newMessageId
+      ? new Set([newMessageId])
+      : new Set(messages.map(m => m.id));
     const msgResults = mlMsgResults.filter(m => newMsgIds.has(m.id));
+
 
     // Persist messages to MongoDB (upsert to avoid duplicates)
     const msgOps = msgResults.map((m) => ({

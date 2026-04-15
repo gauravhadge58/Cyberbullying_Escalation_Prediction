@@ -132,9 +132,22 @@ export default function Simulator() {
 
     setLoading(true);
     try {
-      // Send to prediction API
+      // Send new message + full in-memory history as context to the ML service.
+      // This avoids the backend fetching stale MongoDB history from old sessions.
+      const contextMessages = [
+        ...messages.map(m => ({
+          id: m.messageId,
+          conversation_id: m.conversationId,
+          user_id: m.userId,
+          message: m.text,
+          timestamp: m.timestamp
+        })),
+        newMsg
+      ];
+
       const res = await axios.post(`${API_URL}/predict`, {
-        messages: [newMsg]
+        messages: contextMessages,
+        new_message_id: newMsg.id   // tells backend which message is the new one
       });
       
       // Update with server results (toxicity, etc)
