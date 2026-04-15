@@ -287,11 +287,13 @@ def predict_conversation(messages: list[dict]) -> dict:
         except Exception:
             level = rule_based_escalation(feat_dict)
     else:
-        # Too few messages — use rule-based and cap at MEDIUM
-        # (a 1-2 message conversation cannot meaningfully be HIGH escalation)
+        # Too few messages — use rule-based.
+        # Cap at MEDIUM unless the message is genuinely very toxic (>0.85),
+        # in which case HIGH is still warranted even for a single message.
         level = rule_based_escalation(feat_dict)
         if n_messages < MIN_MESSAGES_FOR_ML and level == LEVEL_HIGH:
-            level = LEVEL_MEDIUM
+            if feat_dict.get("max_toxicity", 0) < 0.85:
+                level = LEVEL_MEDIUM  # benign short text, don't false-alarm
     
     # Map level to numeric score for UI display
     score_map = {LEVEL_LOW: 2, LEVEL_MEDIUM: 5, LEVEL_HIGH: 9}
