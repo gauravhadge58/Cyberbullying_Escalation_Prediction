@@ -1,11 +1,13 @@
 /**
- * Gemini-powered chatbot utility for the CERDS cyberbullying platform.
+ * Groq-powered chatbot utility for the CERDS cyberbullying platform.
  * Builds a context-rich system prompt from live DB stats and handles
  * multi-turn conversation history.
  */
-const { GoogleGenerativeAI } = require("@google/generative-ai");
+const Groq = require("groq-sdk");
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
+const groq = new Groq({
+  apiKey: process.env.GROQ_API_KEY || "",
+});
 
 /**
  * Build the system prompt with live project stats injected.
@@ -57,50 +59,43 @@ online safety, or the CERDS platform, politely redirect them.`;
 }
 
 /**
- * Send a chat message to Gemini and get a response.
+ * Send a chat message to Groq and get a response.
  * @param {string} userMessage - The latest user message
  * @param {Array}  history     - Previous [{role, parts: [{text}]}] turns
  * @param {object} stats       - Live stats from MongoDB for context injection
  * @returns {Promise<{reply: string, history: Array}>}
  */
 async function chat(userMessage, history = [], stats = {}) {
-  if (!process.env.GEMINI_API_KEY) {
-    throw new Error("GEMINI_API_KEY is not configured in the backend .env file.");
+  if (!process.env.GROQ_API_KEY) {
+    throw new Error("GROQ_API_KEY is not configured in the backend .env file.");
   }
 
+  // Convert the frontend's Gemini-style history to Groq/OpenAI style
+  const messages = [
+    { role: "system", content: buildSystemPrompt(stats) }
+  ];
+
+  history.forEach(msg => {
+    // Map 'model' to 'assistant', default 'user' to 'user'
+    const role = msg.role === "model" ? "assistant" : "user";
+    const text = msg.parts?.[0]?.text || msg.text || "";
+    messages.push({ role, content: text });
+  });
+
+  messages.push({ role: "user", content: userMessage });
+
   try {
-    let model = genAI.getGenerativeModel({
-      model: "gemini-2.0-flash",
-      systemInstruction: buildSystemPrompt(stats),
+    // Call the Groq API using the blazing fast Llama 3 70B model
+    const completion = await groq.chat.completions.create({
+      messages,
+      model: "llama3-70b-8192", 
+      temperature: 0.7,
+      max_tokens: 1024,
     });
 
-    let chatSession = model.startChat({
-      history,
-      generationConfig: { maxOutputTokens: 600, temperature: 0.7 },
-    });
+    const reply = completion.choices[0]?.message?.content || "No response";
 
-    let reply;
-    try {
-      const result = await chatSession.sendMessage(userMessage);
-      reply = result.response.text();
-    } catch (err) {
-      if (err.message.includes("429") || err.message.toLowerCase().includes("quota")) {
-        console.log("⚠️ gemini-2.0-flash rate limit hit. Falling back to 1.5-flash...");
-        model = genAI.getGenerativeModel({
-          model: "gemini-1.5-flash",
-          systemInstruction: buildSystemPrompt(stats),
-        });
-        chatSession = model.startChat({
-          history,
-          generationConfig: { maxOutputTokens: 600, temperature: 0.7 },
-        });
-        const result = await chatSession.sendMessage(userMessage);
-        reply = result.response.text();
-      } else {
-        throw err;
-      }
-    }
-
+    // Reconstruct the Gemini-style history so we don't have to rewrite the React frontend
     const updatedHistory = [
       ...history,
       { role: "user", parts: [{ text: userMessage }] },
@@ -108,8 +103,9 @@ async function chat(userMessage, history = [], stats = {}) {
     ];
 
     return { reply, history: updatedHistory };
+
   } catch (err) {
-    if (err.message.includes("429") || err.message.toLowerCase().includes("quota")) {
+    if (err.status === 429) {
       throw new Error("I'm receiving too many requests right now. Please wait a minute and try again.");
     }
     throw err;

@@ -8,13 +8,13 @@
     "dev": "nodemon server.js"
   },
   "dependencies": {
-    "@google/generative-ai": "^0.24.1",
     "axios": "^1.6.7",
     "cors": "^2.8.5",
     "dotenv": "^16.6.1",
     "express": "^4.18.3",
     "express-fileupload": "^1.4.3",
     "form-data": "^4.0.0",
+    "groq-sdk": "^1.1.2",
     "mongoose": "^8.2.1",
     "ws": "^8.16.0"
   },

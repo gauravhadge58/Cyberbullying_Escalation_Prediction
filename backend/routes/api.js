@@ -392,8 +392,8 @@ router.post("/chat", async (req, res) => {
     res.json({ reply, history: updatedHistory });
   } catch (err) {
     console.error("Chat error:", err.message);
-    const userFacing = err.message.includes("GEMINI_API_KEY")
-      ? "Chatbot is not configured. Please add GEMINI_API_KEY to the backend .env file."
+    const userFacing = err.message.includes("GROQ_API_KEY")
+      ? "Chatbot is not configured. Please add GROQ_API_KEY to the backend .env file."
       : "Chatbot error: " + err.message;
     res.status(500).json({ error: userFacing });
   }
