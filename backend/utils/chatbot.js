@@ -68,30 +68,52 @@ async function chat(userMessage, history = [], stats = {}) {
     throw new Error("GEMINI_API_KEY is not configured in the backend .env file.");
   }
 
-  const model = genAI.getGenerativeModel({
-    model: "gemini-2.0-flash",
-    systemInstruction: buildSystemPrompt(stats),
-  });
+  try {
+    let model = genAI.getGenerativeModel({
+      model: "gemini-2.0-flash",
+      systemInstruction: buildSystemPrompt(stats),
+    });
 
-  const chatSession = model.startChat({
-    history,
-    generationConfig: {
-      maxOutputTokens: 600,
-      temperature: 0.7,
-    },
-  });
+    let chatSession = model.startChat({
+      history,
+      generationConfig: { maxOutputTokens: 600, temperature: 0.7 },
+    });
 
-  const result = await chatSession.sendMessage(userMessage);
-  const reply = result.response.text();
+    let reply;
+    try {
+      const result = await chatSession.sendMessage(userMessage);
+      reply = result.response.text();
+    } catch (err) {
+      if (err.message.includes("429") || err.message.toLowerCase().includes("quota")) {
+        console.log("⚠️ gemini-2.0-flash rate limit hit. Falling back to 1.5-flash...");
+        model = genAI.getGenerativeModel({
+          model: "gemini-1.5-flash",
+          systemInstruction: buildSystemPrompt(stats),
+        });
+        chatSession = model.startChat({
+          history,
+          generationConfig: { maxOutputTokens: 600, temperature: 0.7 },
+        });
+        const result = await chatSession.sendMessage(userMessage);
+        reply = result.response.text();
+      } else {
+        throw err;
+      }
+    }
 
-  // Append this turn to history for next call
-  const updatedHistory = [
-    ...history,
-    { role: "user", parts: [{ text: userMessage }] },
-    { role: "model", parts: [{ text: reply }] },
-  ];
+    const updatedHistory = [
+      ...history,
+      { role: "user", parts: [{ text: userMessage }] },
+      { role: "model", parts: [{ text: reply }] },
+    ];
 
-  return { reply, history: updatedHistory };
+    return { reply, history: updatedHistory };
+  } catch (err) {
+    if (err.message.includes("429") || err.message.toLowerCase().includes("quota")) {
+      throw new Error("I'm receiving too many requests right now. Please wait a minute and try again.");
+    }
+    throw err;
+  }
 }
 
 module.exports = { chat };
