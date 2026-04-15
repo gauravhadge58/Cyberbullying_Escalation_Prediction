@@ -27,7 +27,9 @@ export default function Simulator() {
         const demoConv = res.data.conversations.find((c) => c.conversationId === CONVERSATION_ID);
         if (demoConv) {
           setMessages(demoConv.messages || []);
-          setEscalationLevel(demoConv.escalationLevel || "LOW");
+          // Do NOT restore old escalation level — always start fresh at LOW
+          // so stale HIGH from a previous session doesn't persist across logins
+          setEscalationLevel("LOW");
         }
       }).catch(console.error);
 
