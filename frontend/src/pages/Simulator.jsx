@@ -7,9 +7,9 @@ const rawWsUrl = import.meta.env.VITE_WS_URL || "/ws";
 const WS_URL = rawWsUrl.startsWith("/") 
   ? `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}${rawWsUrl}`
   : rawWsUrl;
-const CONVERSATION_ID = "live_demo_room";
 
 export default function Simulator() {
+  const [roomId, setRoomId] = useState("");
   const [messages, setMessages] = useState([]);
   const [escalationLevel, setEscalationLevel] = useState("LOW");
   const [inputText, setInputText] = useState("");
@@ -35,7 +35,7 @@ export default function Simulator() {
         const payload = JSON.parse(event.data);
         if (payload.type === "PREDICTION_UPDATE") {
           // Check if any of the new messages belong to our demo room
-          const newDemoMsgs = payload.data.messages.filter((m) => m.conversation_id === CONVERSATION_ID);
+          const newDemoMsgs = payload.data.messages.filter((m) => m.conversation_id === roomId);
           
           if (newDemoMsgs.length > 0) {
             // Update messages (avoid duplicates using messageId)
@@ -56,7 +56,7 @@ export default function Simulator() {
           }
 
           // Check for escalation update
-          const demoConvUpdate = payload.data.conversations.find((c) => c.conversation_id === CONVERSATION_ID);
+          const demoConvUpdate = payload.data.conversations.find((c) => c.conversation_id === roomId);
           if (demoConvUpdate) {
             setEscalationLevel(demoConvUpdate.escalation_level);
           }
@@ -96,7 +96,7 @@ export default function Simulator() {
 
   const handleJoin = (e) => {
     e.preventDefault();
-    if (username.trim()) setIsJoined(true);
+    if (username.trim() && roomId.trim()) setIsJoined(true);
   };
 
   const handleSend = async (e) => {
@@ -105,7 +105,7 @@ export default function Simulator() {
 
     const newMsg = {
       id: `msg_${Math.random().toString(36).substr(2, 9)}`,
-      conversation_id: CONVERSATION_ID,
+      conversation_id: roomId,
       user_id: username,
       message: inputText.trim(),
       timestamp: new Date().toISOString()
@@ -158,7 +158,7 @@ export default function Simulator() {
       
       // Also update escalation level from HTTP response as a fallback if WebSocket is latent
       if (res.data.conversations?.length > 0) {
-        const demoConvUpdate = res.data.conversations.find((c) => c.conversation_id === CONVERSATION_ID);
+        const demoConvUpdate = res.data.conversations.find((c) => c.conversation_id === roomId);
         if (demoConvUpdate) {
             setEscalationLevel(demoConvUpdate.escalation_level);
         }
@@ -183,7 +183,7 @@ export default function Simulator() {
     if (!window.confirm("Clear all messages in this room?")) return;
     try {
       setLoading(true);
-      await api.clearConversation(CONVERSATION_ID);
+      await api.clearConversation(roomId);
       setMessages([]);
       setEscalationLevel("LOW");
     } catch (err) {
@@ -200,8 +200,16 @@ export default function Simulator() {
         <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-200 w-full max-w-md text-center animate-fade-in">
           <div className="text-4xl mb-4">💬</div>
           <h2 className="text-2xl font-bold text-gray-800 mb-2">Join Simulator</h2>
-          <p className="text-gray-500 mb-6">Enter a username to join the live model test room.</p>
+          <p className="text-gray-500 mb-6">Enter a room ID and username to join the live model test room.</p>
           <form onSubmit={handleJoin} className="space-y-4">
+            <input
+              type="text"
+              placeholder="Room ID (e.g. live_demo_room)"
+              className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary-500"
+              value={roomId}
+              onChange={(e) => setRoomId(e.target.value)}
+              required
+            />
             <input
               type="text"
               placeholder="Username"
@@ -234,7 +242,7 @@ export default function Simulator() {
       {/* Header */}
       <div className={`px-4 md:px-6 py-3 md:py-4 flex justify-between items-center transition-colors duration-500 ${headerColors[escalationLevel]}`}>
         <div>
-          <h2 className="text-base md:text-lg font-bold truncate max-w-[150px] md:max-w-none">Test Room: {CONVERSATION_ID}</h2>
+          <h2 className="text-base md:text-lg font-bold truncate max-w-[150px] md:max-w-none">Test Room: {roomId}</h2>
           <p className="text-xs opacity-90">User: {username}</p>
         </div>
         <div className="flex flex-col items-end gap-2">
