@@ -31,4 +31,28 @@ export const api = {
   // Gemini Chatbot
   chat: (message, history = []) =>
     apiClient.post("/chat", { message, history }).then((res) => res.data),
+
+  // ── LangChain Moderation Layer ────────────────────────────────────────────
+  /** Check if the LangChain LLM provider is reachable */
+  getModerationHealth: () =>
+    apiClient.get("/moderation/health").then((res) => res.data),
+
+  /**
+   * Request an on-demand AI moderation explanation for a conversation.
+   * @param {string} convId - conversation ID
+   * @param {object} payload - { escalation_level, features, messages }
+   */
+  getModerationExplanation: (convId, payload) =>
+    apiClient.post("/moderation/explain", {
+      conversation_id: convId,
+      ...payload,
+    }, { timeout: 35000 }).then((res) => res.data),
+
+  /**
+   * Get a short AI-generated summary of a conversation's escalation pattern.
+   * @param {string} convId - conversation ID
+   */
+  getConversationSummary: (convId) =>
+    apiClient.get(`/moderation/summary/${convId}`, { timeout: 35000 }).then((res) => res.data),
 };
+

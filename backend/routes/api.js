@@ -411,5 +411,102 @@ router.post("/chat", async (req, res) => {
   }
 });
 
-module.exports = router;
+// ─────────────────────────────────────────────
+// LangChain Moderation Layer — Proxy Routes
+// ─────────────────────────────────────────────
 
+/**
+ * GET /api/moderation/health
+ * Checks if the LangChain LLM provider is configured and reachable.
+ */
+router.get("/moderation/health", async (req, res) => {
+  try {
+    const mlResponse = await axios.get(`${ML_URL}/moderation/health`);
+    res.json(mlResponse.data);
+  } catch (err) {
+    console.error("Moderation health error:", err.message);
+    res.status(503).json({ status: "unavailable", error: err.message });
+  }
+});
+
+/**
+ * POST /api/moderation/explain
+ * On-demand AI moderation explanation for a conversation.
+ * Body: { conversation_id, escalation_level, features, messages }
+ */
+router.post("/moderation/explain", async (req, res) => {
+  try {
+    const mlResponse = await axios.post(`${ML_URL}/moderation/explain`, req.body, {
+      timeout: 30000, // LLM may take up to 30s
+    });
+
+    // Optionally persist moderation result to Conversation doc
+    try {
+      const { conversation_id } = req.body;
+      if (conversation_id && mlResponse.data) {
+        await Conversation.updateOne(
+          { conversationId: conversation_id },
+          { $set: { moderation: mlResponse.data, moderationUpdatedAt: new Date() } }
+        );
+      }
+    } catch (_) { /* Non-critical — don't fail the request */ }
+
+    res.json(mlResponse.data);
+  } catch (err) {
+    console.error("Moderation explain error:", err.message);
+    const status = err.response?.status || 500;
+    res.status(status).json({ error: err.response?.data?.detail || err.message });
+  }
+});
+
+/**
+ * GET /api/moderation/summary/:convId
+ * Returns AI-generated summary of a conversation's escalation pattern.
+ */
+router.get("/moderation/summary/:convId", async (req, res) => {
+  try {
+    const mlResponse = await axios.get(`${ML_URL}/moderation/summary/${req.params.convId}`, {
+      timeout: 30000,
+    });
+    res.json(mlResponse.data);
+  } catch (err) {
+    console.error("Moderation summary error:", err.message);
+    const status = err.response?.status || 500;
+    res.status(status).json({ error: err.response?.data?.detail || err.message });
+  }
+});
+
+/**
+ * POST /api/ml-events
+ * Internal endpoint: ML service posts MODERATION_UPDATE events here
+ * so they can be broadcast over the existing WebSocket infrastructure.
+ * (Used as an alternative to polling when the ML service has an update.)
+ */
+router.post("/ml-events", async (req, res) => {
+  try {
+    const { type, data } = req.body;
+    if (!type) return res.status(400).json({ error: "type is required" });
+
+    const wss = req.app.get("wss");
+    if (wss) {
+      wss.broadcast({ type, data });
+    }
+
+    // Persist moderation result to DB if it's a MODERATION_UPDATE
+    if (type === "MODERATION_UPDATE" && data?.conversation_id && data?.moderation) {
+      try {
+        await Conversation.updateOne(
+          { conversationId: data.conversation_id },
+          { $set: { moderation: data.moderation, moderationUpdatedAt: new Date() } }
+        );
+      } catch (_) { /* Non-critical */ }
+    }
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("ML-events error:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+module.exports = router;
