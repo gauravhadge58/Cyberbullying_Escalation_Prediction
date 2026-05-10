@@ -1,1 +1,9 @@
 .kiro
+.env
+node_modules/
+__pycache__/
+*.pyc
+Datasets/*.csv
+Datasets/*.png
+.vscode/
+.idea/
